@@ -1,0 +1,147 @@
+# Weekly Recap — Documentación de referencia
+Intelligence Layer / Arkad Tools
+
+## Qué es
+
+El Weekly Recap es una capa que se apoya sobre el motor diario (Asset
+Translator) y responde una única pregunta por activo:
+
+> ¿Qué aprendió Sentinel sobre este activo durante la semana?
+
+**No es un segundo motor de inteligencia.** No analiza métricas del Data
+Layer, no interpreta el mercado de nuevo, no hace predicciones. Solo lee
+lo que el motor diario ya produjo durante la semana y lo resume como
+memoria narrativa — el informe que un centinela entrega al finalizar su
+guardia semanal.
+
+Una semana sin cambios relevantes es una conclusión válida y constituye
+inteligencia útil por sí misma.
+
+## Dónde vive en el pipeline
+
+```
+Data Layer
+  ↓
+Motor Diario (por activo)              → asset_outputs, asset_history,
+  ↓                                       hypotheses_history
+Weekly Recap (por activo)              → weekly_recap
+  ↓
+"¿Qué aprendió Sentinel sobre GOLD/BTC/DXY/... esta semana?"
+```
+
+Es por activo, no cruza narrativas entre activos ni arma un panorama
+global del mercado (decisión explícita, por ahora).
+
+## Archivos
+
+| Archivo | Rol |
+|---|---|
+| `weekly_output_schema.py` | Pydantic `WeeklyRecapOutput` — response_schema para Gemini |
+| `weekly_engine.py` | `run_weekly_engine(...)` — system prompt + llamada a Gemini + 2 anclas anti-alucinación en código |
+| `weekly_persistence.py` | `generate_and_save_weekly(asset_key)` — orquestador oportunista + lectura/escritura en Supabase |
+
+Mismo patrón de 3 capas que ya usás en el motor diario (`data_contract.py`
+/ `engine.py` / `persistence.py`), aplicado a un input distinto (outputs
+semanales en vez de payload de mercado).
+
+## Inputs que recibe el motor
+
+1. `daily_runs`: corridas diarias de `asset_history` de la semana (fase,
+   modificadores, convicción, traducción macro, etc.)
+2. `hypotheses_week`: evolución de `hypotheses_history` de la semana
+3. `previous_weekly_recap`: el recap de la semana anterior, si existe
+4. `runs_expected` / `runs_used`: cuántas corridas debería haber vs.
+   cuántas hay realmente
+
+## Reglas conceptuales clave
+
+- **Week completeness**: si `runs_used < runs_expected`, el motor **nunca
+  aborta** — genera el recap igual, avisa explícitamente que es parcial
+  (`nota_completitud`), y no infiere narrativas para los días faltantes.
+  La ausencia de información nunca se interpreta como cambio narrativo.
+- **Weekly confidence** (`HIGH`/`MEDIUM`/`LOW`): NO es una predicción de
+  mercado, es el nivel de claridad que Sentinel tiene sobre la evolución
+  narrativa. Considera 4 factores: completitud de la semana, consistencia
+  narrativa, estado de las hipótesis, y si hay info suficiente para
+  conclusiones robustas. No puede ser `HIGH` si la semana está incompleta
+  — reforzado con un chequeo en código, no solo en el prompt.
+- **Honestidad narrativa**: si la semana es parcial, el motor evita
+  frases que impliquen observación completa ("durante toda la semana",
+  "de forma consistente") y usa formulaciones como "en las corridas
+  disponibles de la semana".
+- **Frontera Intelligence Layer / Data Layer**: el output nunca expone
+  nomenclatura interna (`fred.xxx`, `cot.xxx`, `zscore`, tickers como
+  `DGS10`). `variables_a_vigilar` se expresa como preguntas en lenguaje
+  natural (ej. "¿Los fondos especulativos continuarán acumulando
+  posiciones?"). Hay un chequeo con regex en `weekly_engine.py` que
+  loguea una advertencia (no corrige el texto) si algo se cuela.
+- **No hay calendario de feriados**: `runs_used` es simplemente
+  `COUNT(*)` de lo que exista en la ventana de la semana. No distingue
+  feriado de motor caído — para eso está `weekly_confidence` +
+  `nota_completitud`, no un calendario aparte. Decisión deliberada para
+  no agregar complejidad innecesaria.
+- **Oportunista**: si un activo no tiene ningún registro en
+  `asset_history` para la semana (porque su motor diario no existe
+  todavía, o no corrió esa semana puntual), `generate_and_save_weekly()`
+  no genera nada y devuelve `status="skipped_no_data"` sin error. Permite
+  tener la config de los 22 activos lista desde ya, sin acoplar el
+  Weekly Recap al orden en que se implementen los motores diarios.
+
+## Config (`config.py`)
+
+Cada `asset_key` en `ASSET_CONFIGS` necesita `weekly_expected_runs`:
+
+- `5` para mercados tradicionales (forex, commodities, índices, rates) —
+  cierran el fin de semana.
+- `7` únicamente para `BTCUSD` (cripto, único activo 24/7 del registry).
+
+Ya están preparadas 22 entradas (incluyendo activos cuyo motor diario
+todavía no existe): DXY, SP500, NDX100, VIX, VXN, GOLD, SILVER, WTI,
+COPPER, NATGAS, EURUSD, GBPUSD, USDJPY, BTCUSD, DAX, NKY, HSI, RUT,
+USDCAD, USDCHF, US02Y, US10Y, AUDUSD.
+
+Quedan fuera a propósito: `DGS10`/`DGS2`/`DGS5` (yields de FRED) — son
+insumos que alimentan el payload de otros activos, no tienen Motor
+diario propio, así que tampoco tienen Weekly Recap. Regla general: **si
+algo tiene Motor diario, tiene Weekly Recap; si solo alimenta el payload
+de otro activo, no lo tiene.**
+
+## Tabla `weekly_recap` (Supabase, Intelligence Layer)
+
+Append-only (como `asset_history`), con `unique(asset_key, week_start)`
+para que un reintento del mismo activo/semana haga upsert en vez de
+duplicar. Columnas relevantes: `runs_expected`, `runs_used`,
+`is_complete` (generada, `runs_used >= runs_expected`),
+`weekly_confidence`, más los campos narrativos del output
+(`lo_mas_importante`, `que_aprendio_sentinel`, `narrativas_cambiaron`,
+`evolucion_hipotesis`, `sorpresas_semana`, `comparacion_semana_anterior`,
+`variables_a_vigilar`) y `full_output` (jsonb completo, para auditoría).
+
+## Cómo se corre (estado actual: sin cron)
+
+```bash
+python weekly_persistence.py
+```
+
+El `__main__` llama a `generate_and_save_weekly("GOLD")`. La función
+acepta `dry_run: bool = False` — en `True` corre todo el pipeline
+(incluida la llamada real a Gemini) pero no escribe en `weekly_recap`,
+solo imprime el output completo. Útil para validar cambios de prompt
+contra datos reales sin ensuciar la tabla.
+
+No hay cron ni GitHub Action todavía — cada corrida es manual, un
+activo a la vez, mismo criterio que el motor diario mientras no escale.
+
+## Estado del proyecto al 21/07/2026
+
+- Tabla `weekly_recap` creada en Supabase (Intelligence Layer,
+  proyecto `fbhcuqqlvdsmiijwtmsx`).
+- Primer dry run real para GOLD: semana del 20/07 al 26/07, `runs_used=2`
+  de `runs_expected=5`, `weekly_confidence="MEDIUM"`, `nota_completitud`
+  presente — comportamiento esperado para una semana en curso.
+- Pendiente: correr el motor diario de GOLD miércoles y jueves, y el
+  viernes correr `weekly_persistence.py` en real (sin `dry_run`) para
+  persistir el primer registro con la semana completa (5/5).
+- El resto de los 21 activos preparados en config no tienen motor
+  diario todavía — sus Weekly Recap se activan solos (`skipped_no_data`
+  hasta entonces) el día que ese motor exista.

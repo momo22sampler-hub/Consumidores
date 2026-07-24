@@ -1,0 +1,14 @@
+# Secretos — NUNCA subir esto al repo
+.env
+*.env
+*.bak
+*.bak2
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Archivos de contexto generados localmente (files-to-prompt)
+contexto_*.txt
+contexto_*.utf8.txt
