@@ -1,0 +1,48 @@
+# daily_engine.yml
+# Arkad Tools — Motor diario (Asset Translator)
+#
+# Corre martes a sábado 00:15 UTC (21:15 ART, lunes a viernes) — justo
+# después de que termine la extracción diaria (pricing-correlations
+# 23:30 UTC y calendar-metrics 23:45 UTC, ver daily_extractors.yml),
+# para procesar el cierre de mercado del día recién terminado con el
+# dato más fresco posible.
+#
+# También puede lanzarse manualmente desde la pestaña Actions.
+
+name: Daily Engine
+
+on:
+  schedule:
+    - cron: '15 0 * * 2-6'
+  workflow_dispatch:
+
+jobs:
+
+  # ──────────────────────────────────────────────────────────────────────────
+  daily-engine:
+    name: Asset Translator (14 activos)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45  # 14 activos x (2 llamadas + posibles reintentos) + pausas entre activos
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        working-directory: Consumidores
+        run: pip install -r requirements.txt
+
+      - name: Run daily engine
+        working-directory: Consumidores
+        env:
+          DATA_LAYER_SUPABASE_URL:   ${{ secrets.DATA_LAYER_SUPABASE_URL }}
+          DATA_LAYER_SUPABASE_KEY:   ${{ secrets.DATA_LAYER_SUPABASE_KEY }}
+          INTEL_LAYER_SUPABASE_URL:  ${{ secrets.INTEL_LAYER_SUPABASE_URL }}
+          INTEL_LAYER_SUPABASE_KEY:  ${{ secrets.INTEL_LAYER_SUPABASE_KEY }}
+          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+        run: python persistence.py

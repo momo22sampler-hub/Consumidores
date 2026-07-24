@@ -1,0 +1,47 @@
+# weekly_engine.yml
+# Arkad Tools — Motor semanal (Weekly Recap)
+#
+# Corre sábados 01:00 UTC (22:00 ART viernes) — después de que el motor
+# diario procese el cierre del viernes (sábado 00:15 UTC, ver
+# daily_engine.yml), con lo que la semana ya tiene sus 5 corridas
+# esperadas (lunes a viernes) disponibles en asset_history.
+#
+# También puede lanzarse manualmente desde la pestaña Actions.
+
+name: Weekly Engine
+
+on:
+  schedule:
+    - cron: '0 1 * * 6'
+  workflow_dispatch:
+
+jobs:
+
+  # ──────────────────────────────────────────────────────────────────────────
+  weekly-engine:
+    name: Weekly Recap (14 activos configurados)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        working-directory: Consumidores
+        run: pip install -r requirements.txt
+
+      - name: Run weekly engine
+        working-directory: Consumidores
+        env:
+          DATA_LAYER_SUPABASE_URL:   ${{ secrets.DATA_LAYER_SUPABASE_URL }}
+          DATA_LAYER_SUPABASE_KEY:   ${{ secrets.DATA_LAYER_SUPABASE_KEY }}
+          INTEL_LAYER_SUPABASE_URL:  ${{ secrets.INTEL_LAYER_SUPABASE_URL }}
+          INTEL_LAYER_SUPABASE_KEY:  ${{ secrets.INTEL_LAYER_SUPABASE_KEY }}
+          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+        run: python weekly_persistence.py
