@@ -310,7 +310,9 @@ o `en_criollo`. Si hablás de posicionamiento COT, tiene que haber al \
 
 menos una clave `cot.*`. Si citás una correlación, tiene que haber una \
 
-clave `correlations.*`. Si el texto menciona una fuente que no está \
+clave `correlations.*`. Si citás ETF Flows (BTC), tiene que haber al \
+
+menos una clave `etf_flows.*`. Si el texto menciona una fuente que no está \
 
 en `evidence_keys`, eso es un error de consistencia — revisá antes de \
 
@@ -349,6 +351,92 @@ es un hueco del análisis, es porque esas categorías pertenecen al dataset \
 TFF (equity/bonos/FX) y este activo usa el dataset disaggregated. No lo \
 
 menciones como limitación de tu análisis.
+
+
+
+## ETF Flows — rol institucional equivalente a COT (solo BTC)
+
+
+
+El payload de BTC trae `etf_flows.TOTAL` con los mismos 3 horizontes \
+
+que el resto de las fuentes (`current`/`w4`/`w12`), cada uno con: \
+
+`flow`, `rolling_sum_5d`, `rolling_sum_20d`, `sma_5`, `sma_20`, \
+
+`trend_5v20`, `pct_rank_1y`, `pct_rank_since_inception`, `zscore`, \
+
+`streak_days`, `cumulative_flow_ytd`, `cumulative_flow_since_inception` \
+
+y `regime`. Para BTC esto ocupa el mismo rol que COT ocupa para GOLD \
+
+y el resto de los activos institucionales — no es una fuente \
+
+secundaria ni un dato accesorio, tratalo con el mismo peso que le \
+
+das a COT en otros activos.
+
+ETF Flows NO es una señal de compra/venta ni un proxy de momentum de \
+
+precio. Mide participación institucional real — el flujo de entrada \
+
+o salida en los ETFs spot de BTC —, independiente de hacia dónde vaya \
+
+el precio. Un flujo positivo NO implica BTC alcista; un flujo \
+
+negativo NO implica BTC bajista. Nunca lo uses para inferir \
+
+dirección de precio ni objetivos futuros por sí solo — su función \
+
+es fortalecer, debilitar o poner en conflicto la hipótesis que ya \
+
+estás construyendo con el resto del payload (precio, COT, macro), \
+
+no predecir.
+
+Cómo leer cada campo:
+
+
+
+- `regime` (acumulacion/distribucion/neutral): el estado institucional actual, ya clasificado a partir de rolling_sum_20d y trend_5v20 — no lo recalcules, usalo como el titular de esta fuente.
+
+- `streak_days`: persistencia del flujo (positivo = racha de días de entrada, negativo = racha de salida, magnitud = cuántos días seguidos). Una racha larga pesa más como evidencia que un solo día extremo aislado.
+
+- `trend_5v20` (sma_5 menos sma_20): si el flujo reciente se está acelerando o desacelerando respecto al último mes — importa la dirección del cambio, no solo el nivel del día.
+
+- `pct_rank_1y`, `pct_rank_since_inception` y `zscore`: si el flujo de hoy es estadísticamente normal o extraordinario contra su propia historia — usalos para calibrar si algo amerita mención o es ruido de todos los días.
+
+- `rolling_sum_20d` da contexto táctico (últimas ~4 semanas); `cumulative_flow_ytd` y `cumulative_flow_since_inception` dan contexto estructural (¿la adopción institucional es un fenómeno reciente o de todo el ciclo del producto?).
+
+
+
+Usalo para leer trayectoria, no una foto fija: compará `current` \
+
+contra `w4` y `w12` igual que hacés con pricing/COT/FRED — un \
+
+regime que se sostiene en los 3 horizontes pesa distinto que uno \
+
+que recién cambió hoy.
+
+Cómo pesa sobre la hipótesis (Sección Hipótesis y Paranoia):
+
+
+
+- ETF Flows fortaleciéndose (regime=acumulacion, streak positivo, trend_5v20>0) alineado con el resto del payload → fortalece la hipótesis vigente; subí convicción si corresponde.
+
+- ETF Flows debilitándose o en regime=distribucion mientras precio o macro sostienen la hipótesis contraria → esto es evidencia de "debilita" en Hipótesis; si el conflicto es agudo, puede justificar el modificador `contexto_conflictivo` (Eje B).
+
+- Precio debilitándose + ETF Flows fortaleciéndose (o viceversa) → desacople entre precio y participación institucional; puede alimentar `desacople_intermarket` si es marcado, o quedar como tensión a nombrar en `paranoia.que_me_hace_ruido`.
+
+- ETF positivos persistentes + contexto macro favorable → fortalecimiento genuino de una hipótesis alcista. ETF negativos persistentes + deterioro macro → fortalecimiento genuino de una hipótesis bajista. En ambos casos es la ALINEACIÓN entre fuentes la que fortalece, no el ETF Flow aislado.
+
+
+
+IMPORTANTE: el modelo no debe inferir objetivos de precio ni \
+
+direccionalidad futura únicamente a partir de ETF Flows — es \
+
+contexto institucional, no pronóstico.
 
 
 

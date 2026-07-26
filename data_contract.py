@@ -5,9 +5,11 @@ Intelligence Layer / Arkad Tools
 build_payload(asset_key) es el único punto de entrada. Devuelve un dict
 JSON-serializable con todo lo que el motor de caracterización de Estado
 (doc fuente, Sección 1) necesita: 3 snapshots (current/w4/w12) por fuente,
-calendario reciente + upcoming, y correlaciones con zscore/percentil
+calendario reciente + upcoming, correlaciones con zscore/percentil
 calculado on-the-fly (no persistido — ver decisión de arquitectura sobre
-pricing_correlations).
+pricing_correlations), y ETF Flows (3 snapshots por ticker, solo para
+activos con 'etf_tickers' en su config — hoy únicamente BTC; None para
+el resto).
 
 No hace ningún juicio de fase/modificador/convicción — eso es trabajo
 del motor LLM (Paso 2). Este módulo solo junta datos crudos de métricas.
@@ -62,6 +64,32 @@ def _get_fred(client, cfg: dict, today: date) -> dict:
     for series_id in cfg["fred_series"]:
         filters = {"series_id": series_id}
         out[series_id] = _snapshots(client, "fred_metrics", "observation_date", filters, today)
+    return out
+
+
+def _get_etf_flows(client, cfg: dict, asset_key: str, today: date) -> dict | None:
+    """
+    Snapshots current/w4/w12 de etf_flows_metrics, por ticker, solo para
+    activos que declaran 'etf_tickers' en su ASSET_CONFIGS (hoy: solo BTC,
+    ticker agregado 'TOTAL' — ver ETF_Flows/etf_flows_metrics_calculator.py,
+    que en V1 solo calcula (asset, ticker) = (BTC, TOTAL)).
+
+    Devuelve None para el resto de los 14 activos (no tienen 'etf_tickers'
+    en su config) — el payload de esos activos queda sin cambios.
+
+    El filtro 'asset' usa asset_key directamente (coincide 1:1 con la
+    columna 'asset' de etf_flows_metrics, ej. "BTC" == "BTC") — no hace
+    falta un identificador aparte en cfg como pricing_symbol/cot_symbol,
+    porque a diferencia de esas tablas acá no hay divergencia de nombre.
+    """
+    tickers = cfg.get("etf_tickers")
+    if not tickers:
+        return None
+
+    out = {}
+    for ticker in tickers:
+        filters = {"asset": asset_key, "ticker": ticker}
+        out[ticker] = _snapshots(client, "etf_flows_metrics", "date", filters, today)
     return out
 
 
@@ -217,6 +245,7 @@ def build_payload(asset_key: str, as_of: date | None = None) -> dict:
         },
         "fred": _get_fred(client, cfg, today),
         "sentiment": _get_sentiment(client, cfg, today),
+        "etf_flows": _get_etf_flows(client, cfg, asset_key, today),
         "correlations": _get_correlations(client, cfg, today),
         "calendar_recent": _get_calendar_recent(client, cfg, today),
         "calendar_upcoming": _get_calendar_upcoming(client, cfg, today),

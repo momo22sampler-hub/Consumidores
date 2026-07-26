@@ -1,11 +1,14 @@
 # daily_engine.yml
 # Arkad Tools — Motor diario (Asset Translator)
 #
-# Corre martes a sábado 00:15 UTC (21:15 ART, lunes a viernes) — justo
-# después de que termine la extracción diaria (pricing-correlations
-# 23:30 UTC y calendar-metrics 23:45 UTC, ver daily_extractors.yml),
-# para procesar el cierre de mercado del día recién terminado con el
-# dato más fresco posible.
+# Corre martes a sábado 00:40 UTC (21:40 ART, lunes a viernes) — después
+# de que termine TODA la extracción diaria, incluida la más tardía
+# (etf-flows-metrics, 00:35 UTC — ver daily_extractors.yml). Antes
+# corría a las 00:15 UTC, 20 minutos antes de etf-flows-metrics: BTC
+# terminaba leyendo el etf_flows_metrics de AYER (fallback silencioso
+# de _snapshots() a 'la última fila on-or-before hoy'), no el de hoy.
+# Se corrige moviendo el motor al final de la cadena — recopilación
+# completa primero, hipótesis después.
 #
 # También puede lanzarse manualmente desde la pestaña Actions.
 
@@ -13,7 +16,7 @@ name: Daily Engine
 
 on:
   schedule:
-    - cron: '15 0 * * 2-6'
+    - cron: '40 0 * * 2-6'
   workflow_dispatch:
 
 jobs:

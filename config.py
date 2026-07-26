@@ -1332,9 +1332,9 @@ ASSET_CONFIGS = {
 
         # primaria, asset_mgr como complementaria. Ver además ETF Flows
 
-        # (pendiente, item aparte) como señal de adopción institucional
+        # (wireado más abajo, campo etf_tickers) como señal de adopción
 
-        # real — COT mide especulación en futuros, no lo mismo.
+        # institucional real — COT mide especulación en futuros, no lo mismo.
 
         "cot_primary_field_prefix": "lev_money",
 
@@ -1410,15 +1410,31 @@ ASSET_CONFIGS = {
 
 
 
-        # PENDIENTE (fuera de V1): ETF Flows (Farside) — el usuario lo
+        # --- ETF Flows (Farside) ---
 
-        # eleva a pieza central (equivalente conceptual a COT para GOLD),
+        # Pieza central para BTC (equivalente conceptual a COT para GOLD),
 
-        # no un dato más. Requiere su propia función en data_contract.py
+        # no un dato más — así lo elevó el usuario. No encaja en
 
-        # (_get_etf_flows) + tabla nueva — no encaja en correlation_pairs
+        # correlation_pairs ni fred_series porque no es un símbolo de
 
-        # ni fred_series. Se suma cuando el item 4 del roadmap esté armado.
+        # pricing_correlations ni una serie de fred_metrics — tiene su
+
+        # propia función en data_contract.py (_get_etf_flows), leyendo
+
+        # etf_flows_metrics (tabla poblada por ETF_Flows/etf_flows_metrics_builder.py).
+
+        # 'TOTAL' es el ticker agregado que publica Farside (suma de todos
+
+        # los ETFs spot de BTC) — en V1 es el único ticker que
+
+        # etf_flows_metrics_builder.py calcula (ver ese docstring), así que
+
+        # es el único que tiene sentido pedir acá por ahora. La lista deja
+
+        # espacio para sumar tickers individuales el día que se calculen.
+
+        "etf_tickers": ["TOTAL"],
 
 
 
