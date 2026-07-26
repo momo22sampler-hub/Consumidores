@@ -1,0 +1,45 @@
+WEEKLY RECAP (V2) – Próximos pasos
+
+Objetivo:
+
+* Que Sentinel no solo describa qué ocurrió durante la semana, sino que explique qué aprendió y cómo evolucionaron sus hipótesis.
+
+Mantener el Weekly Recap simple y centrado en tres apartados:
+
+1. Lo más importante de la semana.
+
+* Principal driver del activo.
+* Qué cambió respecto de la semana anterior.
+* Si hubo cambios de fase, modificadores o convicción.
+
+2. ¿Qué aprendió Sentinel?
+
+* Contrastar las hipótesis de inicio y fin de semana.
+* Explicar qué variables reforzaron o debilitaron la narrativa principal.
+* Destacar si el motor debió cambiar su interpretación del contexto macro.
+
+3. Variables a vigilar.
+
+* Listar las métricas más importantes para la próxima semana.
+* Ejemplo: DGS10, posicionamiento institucional, calendario económico, correlaciones relevantes, etc.
+* Explicar brevemente por qué son importantes.
+
+Mejora futura (V2):
+
+* Aprovechar las corridas diarias del motor (lunes a viernes) para reconstruir cómo evolucionó la narrativa del activo.
+* Permitir detectar cambios como:
+
+  * Acumulación → Tendencia madura.
+  * Contexto favorable → Contexto conflictivo.
+  * Convicción alta → Convicción media.
+  * Hipótesis alcista → Hipótesis neutral o bajista.
+
+Filosofía del Weekly Recap:
+
+* No debe ser un "resumen del mercado".
+* Debe ser el diario de aprendizaje de Sentinel durante la semana.
+* La pregunta central que debe responder es:
+
+  "¿Qué aprendió Sentinel esta semana sobre este activo y qué podría hacerlo cambiar de opinión la próxima semana?"
+
+No es prioritario para la V1. Implementarlo una vez finalizados los Asset Translators y el Dashboard inicial.

@@ -48,17 +48,23 @@ FUERA DE ASSET_CONFIGS a propósito (no son un "activo con motor propio"):
 
     caso "sin COT".
 
-  - BTC, ETH: en standby. Hoy no hay COT para BTC en Data Layer (aunque
+  - BTC: PROMOVIDO a asset_key propio (2026-07) — se cumplió la condición
 
-    sí existe en CME/CFTC real — no está cargado acá). Si en el trabajo
+    que este mismo docstring pedía: se sumó COT (tff_fut, symbol="BTC").
 
-    de enriquecimiento de este fin de semana se suma COT para alguno de
+    Tratado con narrativa propia, distinta de GOLD/FX — no "commodity
 
-    los dos, ahí sí pasan a ser candidatos reales a asset_key propio —
+    digital" ni "divisa", sino activo de liquidez global/risk-on-off
 
-    hasta entonces, se usan como correlation_pair nomás (ya lo hace
+    dentro y fuera del ecosistema cripto (decisión del usuario). Ver su
 
-    AUDUSD, por ejemplo).
+    entrada en ASSET_CONFIGS para el detalle de anclas curadas.
+
+
+
+  - ETH: sigue en standby — mismo motivo original (sin COT propio en
+
+    Data Layer). Se usa como correlation_pair de BTC vía ETHBTC.
 
   - NATGAS (NG): tiene pricing + COT completos (dataset disagg_fut), pero
 
@@ -1295,6 +1301,146 @@ ASSET_CONFIGS = {
         "calendar_impact_filter": "High",
 
         "weekly_expected_runs": 5,
+
+    },
+
+
+
+    "BTC": {
+
+        "display_name": "Bitcoin (BTCUSD)",
+
+
+
+        # --- identificadores reales por tabla ---
+
+        "pricing_symbol": "BTCUSD",
+
+        "cot_symbol": "BTC",
+
+        "cot_dataset_type": "tff_fut",
+
+        "correlation_symbol": "BTCUSD",
+
+
+
+        # --- posicionamiento institucional ---
+
+        # tff_fut, mismo patrón que las 4 FX (JPY/CAD/CHF/AUD): lev_money
+
+        # (hedge funds/CTAs, posicionamiento especulativo apalancado) como
+
+        # primaria, asset_mgr como complementaria. Ver además ETF Flows
+
+        # (pendiente, item aparte) como señal de adopción institucional
+
+        # real — COT mide especulación en futuros, no lo mismo.
+
+        "cot_primary_field_prefix": "lev_money",
+
+        "cot_secondary_field_prefix": "asset_mgr",
+
+
+
+        # --- DECISIÓN DE NARRATIVA (usuario, 2026-07) ---
+
+        # BTC NO se trata como commodity digital (GOLD) ni como divisa (FX).
+
+        # Se trata como activo de liquidez global / apetito por riesgo, con
+
+        # una capa adicional propia del ecosistema cripto. El 80% de su
+
+        # comportamiento se explica por 5 preguntas: liquidez global,
+
+        # risk-on/off, dominancia dentro de cripto, posicionamiento
+
+        # institucional (COT + ETF), condiciones financieras generales.
+
+        # Deliberadamente SIN anclas de GOLD/FX (GC, EURUSD) ni de equities
+
+        # puntuales (ES, NQ) — DXY+VIX ya capturan indirectamente el
+
+        # componente risk-on/off que NQ aportaría, sin sumar una 7ma ancla
+
+        # redundante. 8 anclas curadas > 15 mediocres (criterio explícito).
+
+
+
+        # --- correlaciones curadas ---
+
+        # Anclas macro (2): DXY (fortaleza dólar / liquidez global),
+
+        # VIX (risk-on/off, sustituye a NQ por redundancia).
+
+        # Anclas cripto (4): BTC.D/TOTAL2 (¿lidera BTC o rota a altcoins?),
+
+        # USDT.D (¿sale liquidez a stablecoin = risk-off intra-cripto?),
+
+        # ETHBTC (rotación de ciclo BTC-led vs alt-led).
+
+        "correlation_pairs": ["DXY", "VIX", "BTC.D", "TOTAL2", "USDT.D", "ETHBTC"],
+
+
+
+        # --- series FRED curadas ---
+
+        # WALCL: balance de la Fed (QE/QT) — para BTC pesa igual o más que
+
+        # para GOLD, es la narrativa de "liquidez global" que el usuario
+
+        # marcó como pilar #1. M2SL/NFCI: condiciones financieras/liquidez
+
+        # amplia. DGS10/DGS2: costo de oportunidad. Se deja afuera PCEPILFE
+
+        # (inflación) a propósito — la narrativa de BTC acá no es cobertura
+
+        # de inflación, es liquidez/risk-on (a diferencia de GOLD).
+
+        "fred_series": ["DGS10", "DGS2", "WALCL", "M2SL", "NFCI"],
+
+
+
+        # --- sentimiento ---
+
+        # Cripto-específico, NO el fear_and_greed general (equities) que
+
+        # usan GOLD/el resto — ver fix en data_contract.py._get_sentiment.
+
+        "sentiment_indicator": "crypto_fear_and_greed",
+
+
+
+        # PENDIENTE (fuera de V1): ETF Flows (Farside) — el usuario lo
+
+        # eleva a pieza central (equivalente conceptual a COT para GOLD),
+
+        # no un dato más. Requiere su propia función en data_contract.py
+
+        # (_get_etf_flows) + tabla nueva — no encaja en correlation_pairs
+
+        # ni fred_series. Se suma cuando el item 4 del roadmap esté armado.
+
+
+
+        # --- calendario ---
+
+        # Solo USD — el driver de calendario de BTC es la macro americana
+
+        # (FOMC/CPI/NFP), no hay calendario cripto-específico que aporte.
+
+        "calendar_currencies": ["USD"],
+
+        "calendar_lookback_days": 21,
+
+        "calendar_forward_days": 14,
+
+        "calendar_impact_filter": "High",
+
+        # 7, no 5 — BTC cotiza 24/7, el Weekly Recap consume sus hipótesis
+
+        # los 7 días, a diferencia del resto de los activos (mercados M-V).
+
+        "weekly_expected_runs": 7,
 
     },
 

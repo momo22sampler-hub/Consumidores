@@ -20,9 +20,9 @@ jobs:
 
   # ──────────────────────────────────────────────────────────────────────────
   daily-engine:
-    name: Asset Translator (14 activos)
+    name: Asset Translator (15 activos)
     runs-on: ubuntu-latest
-    timeout-minutes: 45  # 14 activos x (2 llamadas + posibles reintentos) + pausas entre activos
+    timeout-minutes: 45  # 15 activos x (2 llamadas + posibles reintentos) + pausas entre activos
 
     steps:
       - name: Checkout

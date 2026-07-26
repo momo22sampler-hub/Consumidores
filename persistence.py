@@ -277,10 +277,11 @@ if __name__ == "__main__":
         "USDCAD",
         "USDCHF",
         "AUDUSD",
+        "BTC",
     ]
 
     # Pausa entre activos (no entre reintentos dentro de una misma llamada
-    # — eso ya lo maneja engine.py). Con 14 activos, sin esto se manda una
+    # — eso ya lo maneja engine.py). Con 15 activos, sin esto se manda una
     # ráfaga de 2 llamadas x N activos casi en simultáneo, lo que aumenta
     # la chance de pisar el límite de RPM del free tier y generar más 503
     # de los que el retry por-llamada puede compensar. 15s es conservador
@@ -318,7 +319,7 @@ if __name__ == "__main__":
                 time.sleep(DELAY_BETWEEN_ASSETS_SECONDS)
         return round_results
 
-    # Pasada inicial: los 14 activos.
+    # Pasada inicial: los 15 activos.
     results: dict[str, dict] = _run_round(ASSETS)
 
     # Pasadas de reintento: solo los que quedaron con error, hasta agotar

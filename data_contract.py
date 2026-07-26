@@ -65,13 +65,14 @@ def _get_fred(client, cfg: dict, today: date) -> dict:
     return out
 
 
-def _get_sentiment(client, today: date) -> dict:
+def _get_sentiment(client, cfg: dict, today: date) -> dict:
     """
-    sentiment_metrics no tiene columna symbol — es un indicador de mercado
-    general (fear_and_greed), no específico de Oro. Se trae igual como
-    contexto macro, filtrando por indicator en vez de symbol.
+    sentiment_metrics no tiene columna symbol — es un indicador (general o
+    específico de cripto), filtrado por 'indicator'. Default 'fear_and_greed'
+    (CNN, mercado general) para no romper assets existentes; BTC pasa
+    'crypto_fear_and_greed' vía cfg.
     """
-    filters = {"indicator": "fear_and_greed"}
+    filters = {"indicator": cfg.get("sentiment_indicator", "fear_and_greed")}
     return _snapshots(client, "sentiment_metrics", "date", filters, today)
 
 
@@ -215,7 +216,7 @@ def build_payload(asset_key: str, as_of: date | None = None) -> dict:
             "snapshots": _get_cot(client, cfg, today),
         },
         "fred": _get_fred(client, cfg, today),
-        "sentiment": _get_sentiment(client, today),
+        "sentiment": _get_sentiment(client, cfg, today),
         "correlations": _get_correlations(client, cfg, today),
         "calendar_recent": _get_calendar_recent(client, cfg, today),
         "calendar_upcoming": _get_calendar_upcoming(client, cfg, today),
