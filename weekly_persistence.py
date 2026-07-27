@@ -200,6 +200,7 @@ def generate_and_save_weekly(asset_key: str, today: date | None = None, verbose:
 
 
 if __name__ == "__main__":
+    import os
     import time
     import traceback
 
@@ -213,6 +214,26 @@ if __name__ == "__main__":
 
     results: dict[str, dict] = {}
     asset_keys = list(ASSET_CONFIGS.keys())
+
+    # ASSET_FILTER (incluir) / ASSET_EXCLUDE (excluir): listas separadas por
+    # comas de asset_keys. Existen para separar el recap semanal de BTC
+    # (7 días, corre el domingo) del resto (5 días, corre el sábado) sin
+    # duplicar generate_and_save_weekly() en otro archivo — ver
+    # weekly_engine.yml. Sin ninguna de las dos, corre todo (sin cambios).
+    _asset_filter = os.environ.get("ASSET_FILTER", "").strip()
+    if _asset_filter:
+        _requested = {a.strip().upper() for a in _asset_filter.split(",") if a.strip()}
+        asset_keys = [a for a in asset_keys if a in _requested]
+
+    _asset_exclude = os.environ.get("ASSET_EXCLUDE", "").strip()
+    if _asset_exclude:
+        _excluded = {a.strip().upper() for a in _asset_exclude.split(",") if a.strip()}
+        asset_keys = [a for a in asset_keys if a not in _excluded]
+
+    if not asset_keys:
+        raise SystemExit(
+            "ASSET_FILTER/ASSET_EXCLUDE no dejaron ningún asset_key para correr."
+        )
 
     for i, asset_key in enumerate(asset_keys):
         try:

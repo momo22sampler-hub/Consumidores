@@ -259,6 +259,7 @@ def generate_and_save(asset_key: str, verbose: bool = True) -> dict:
 
 
 if __name__ == "__main__":
+    import os
     import time
     import traceback
 
@@ -279,6 +280,20 @@ if __name__ == "__main__":
         "AUDUSD",
         "BTC",
     ]
+
+    # ASSET_FILTER: lista separada por comas de asset_keys a correr en esta
+    # invocación (ej. "BTC"). Permite reusar este mismo script para el cron
+    # de fin de semana de BTC (único activo 24/7 — ver daily_engine.yml)
+    # sin duplicar generate_and_save() en un archivo aparte. Si no está
+    # seteada, corre los 15 de siempre (comportamiento sin cambios).
+    _asset_filter = os.environ.get("ASSET_FILTER", "").strip()
+    if _asset_filter:
+        _requested = {a.strip().upper() for a in _asset_filter.split(",") if a.strip()}
+        ASSETS = [a for a in ASSETS if a in _requested]
+        if not ASSETS:
+            raise SystemExit(
+                f"ASSET_FILTER={_asset_filter!r} no matchea ningún asset_key de la lista."
+            )
 
     # Pausa entre activos (no entre reintentos dentro de una misma llamada
     # — eso ya lo maneja engine.py). Con 15 activos, sin esto se manda una

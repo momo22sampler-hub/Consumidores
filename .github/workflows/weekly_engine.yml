@@ -4,7 +4,16 @@
 # Corre sábados 01:00 UTC (22:00 ART viernes) — después de que el motor
 # diario procese el cierre del viernes (sábado 00:15 UTC, ver
 # daily_engine.yml), con lo que la semana ya tiene sus 5 corridas
-# esperadas (lunes a viernes) disponibles en asset_history.
+# esperadas (lunes a viernes) disponibles en asset_history. Este job
+# EXCLUYE a BTC (ASSET_EXCLUDE=BTC): a esta hora BTC todavía tiene
+# pendiente el cierre del sábado y domingo, así que recibe su propio
+# recap el domingo — ver weekly-engine-btc abajo.
+#
+# BTC cotiza 24/7 → weekly_expected_runs=7 en config.py. Su recap corre
+# lunes 01:00 UTC (22:00 ART domingo), después de que
+# daily-engine-btc-weekend procese el cierre ART del domingo (lunes
+# 00:40 UTC, ver daily_engine.yml), con lo que ya están las 7 corridas
+# (lunes a domingo) disponibles en asset_history.
 #
 # También puede lanzarse manualmente desde la pestaña Actions.
 
@@ -12,16 +21,18 @@ name: Weekly Engine
 
 on:
   schedule:
-    - cron: '0 1 * * 6'
+    - cron: '0 1 * * 6'  # weekly-engine — 14 activos (sin BTC), sábado
+    - cron: '0 1 * * 1'  # weekly-engine-btc — solo BTC, lunes
   workflow_dispatch:
 
 jobs:
 
   # ──────────────────────────────────────────────────────────────────────────
   weekly-engine:
-    name: Weekly Recap (14 activos configurados)
+    name: Weekly Recap (14 activos, sin BTC)
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 1 * * 6'
 
     steps:
       - name: Checkout
@@ -44,4 +55,36 @@ jobs:
           INTEL_LAYER_SUPABASE_URL:  ${{ secrets.INTEL_LAYER_SUPABASE_URL }}
           INTEL_LAYER_SUPABASE_KEY:  ${{ secrets.INTEL_LAYER_SUPABASE_KEY }}
           GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          ASSET_EXCLUDE:             BTC
+        run: python weekly_persistence.py
+
+  # ──────────────────────────────────────────────────────────────────────────
+  weekly-engine-btc:
+    name: Weekly Recap — BTC only (7 corridas, lun-dom)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 1 * * 1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run weekly engine (BTC only)
+        env:
+          DATA_LAYER_SUPABASE_URL:   ${{ secrets.DATA_LAYER_SUPABASE_URL }}
+          DATA_LAYER_SUPABASE_KEY:   ${{ secrets.DATA_LAYER_SUPABASE_KEY }}
+          INTEL_LAYER_SUPABASE_URL:  ${{ secrets.INTEL_LAYER_SUPABASE_URL }}
+          INTEL_LAYER_SUPABASE_KEY:  ${{ secrets.INTEL_LAYER_SUPABASE_KEY }}
+          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          ASSET_FILTER:              BTC
         run: python weekly_persistence.py

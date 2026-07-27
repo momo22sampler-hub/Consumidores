@@ -10,13 +10,21 @@
 # Se corrige moviendo el motor al final de la cadena — recopilación
 # completa primero, hipótesis después.
 #
+# BTC (único activo 24/7) además corre domingo y lunes 00:40 UTC —
+# procesa el cierre ART de sábado y domingo respectivamente — vía el
+# job daily-engine-btc-weekend, filtrando con ASSET_FILTER=BTC sobre
+# el mismo persistence.py. El resto de los activos no tiene precio
+# nuevo el fin de semana, así que se quedan con el cron de martes a
+# sábado de arriba.
+#
 # También puede lanzarse manualmente desde la pestaña Actions.
 
 name: Daily Engine
 
 on:
   schedule:
-    - cron: '40 0 * * 2-6'
+    - cron: '40 0 * * 2-6'  # daily-engine — 15 activos, lun-vie
+    - cron: '40 0 * * 0,1'  # daily-engine-btc-weekend — solo BTC, sáb y dom
   workflow_dispatch:
 
 jobs:
@@ -26,6 +34,7 @@ jobs:
     name: Asset Translator (15 activos)
     runs-on: ubuntu-latest
     timeout-minutes: 45  # 15 activos x (2 llamadas + posibles reintentos) + pausas entre activos
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '40 0 * * 2-6'
 
     steps:
       - name: Checkout
@@ -48,4 +57,35 @@ jobs:
           INTEL_LAYER_SUPABASE_URL:  ${{ secrets.INTEL_LAYER_SUPABASE_URL }}
           INTEL_LAYER_SUPABASE_KEY:  ${{ secrets.INTEL_LAYER_SUPABASE_KEY }}
           GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+        run: python persistence.py
+
+  # ──────────────────────────────────────────────────────────────────────────
+  daily-engine-btc-weekend:
+    name: Asset Translator — BTC only (fin de semana)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10  # 1 activo x (2 llamadas + posibles reintentos)
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '40 0 * * 0,1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run daily engine (BTC only)
+        env:
+          DATA_LAYER_SUPABASE_URL:   ${{ secrets.DATA_LAYER_SUPABASE_URL }}
+          DATA_LAYER_SUPABASE_KEY:   ${{ secrets.DATA_LAYER_SUPABASE_KEY }}
+          INTEL_LAYER_SUPABASE_URL:  ${{ secrets.INTEL_LAYER_SUPABASE_URL }}
+          INTEL_LAYER_SUPABASE_KEY:  ${{ secrets.INTEL_LAYER_SUPABASE_KEY }}
+          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          ASSET_FILTER:              BTC
         run: python persistence.py
