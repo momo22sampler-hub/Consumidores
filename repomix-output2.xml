@@ -3797,6 +3797,3899 @@ if __name__ == "__main__":
             print(f"  {asset}: OK — flags={result.get('elasticity_flags')}")
 </file>
 
+<file path=".github/workflows/weekly_engine.yml">
+# weekly_engine.yml
+# Arkad Tools — Motor semanal (Weekly Recap)
+#
+# Corre sábados 01:00 UTC (22:00 ART viernes) — después de que el motor
+# diario procese el cierre del viernes (sábado 00:15 UTC, ver
+# daily_engine.yml), con lo que la semana ya tiene sus 5 corridas
+# esperadas (lunes a viernes) disponibles en asset_history. Este job
+# EXCLUYE a BTC (ASSET_EXCLUDE=BTC): a esta hora BTC todavía tiene
+# pendiente el cierre del sábado y domingo, así que recibe su propio
+# recap el domingo — ver weekly-engine-btc abajo.
+#
+# BTC cotiza 24/7 → weekly_expected_runs=7 en config.py. Su recap corre
+# lunes 01:00 UTC (22:00 ART domingo), después de que
+# daily-engine-btc-weekend procese el cierre ART del domingo (lunes
+# 00:40 UTC, ver daily_engine.yml), con lo que ya están las 7 corridas
+# (lunes a domingo) disponibles en asset_history.
+#
+# También puede lanzarse manualmente desde la pestaña Actions.
+
+name: Weekly Engine
+
+on:
+  schedule:
+    - cron: '0 1 * * 6'  # weekly-engine — 14 activos (sin BTC), sábado
+    - cron: '0 1 * * 1'  # weekly-engine-btc — solo BTC, lunes
+  workflow_dispatch:
+
+jobs:
+
+  # ──────────────────────────────────────────────────────────────────────────
+  weekly-engine:
+    name: Weekly Recap (14 activos, sin BTC)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 1 * * 6'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run weekly engine
+        env:
+          DATA_LAYER_SUPABASE_URL:   ${{ secrets.DATA_LAYER_SUPABASE_URL }}
+          DATA_LAYER_SUPABASE_KEY:   ${{ secrets.DATA_LAYER_SUPABASE_KEY }}
+          INTEL_LAYER_SUPABASE_URL:  ${{ secrets.INTEL_LAYER_SUPABASE_URL }}
+          INTEL_LAYER_SUPABASE_KEY:  ${{ secrets.INTEL_LAYER_SUPABASE_KEY }}
+          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          ASSET_EXCLUDE:             BTC
+        run: python weekly_persistence.py
+
+  # ──────────────────────────────────────────────────────────────────────────
+  weekly-engine-btc:
+    name: Weekly Recap — BTC only (7 corridas, lun-dom)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 1 * * 1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run weekly engine (BTC only)
+        env:
+          DATA_LAYER_SUPABASE_URL:   ${{ secrets.DATA_LAYER_SUPABASE_URL }}
+          DATA_LAYER_SUPABASE_KEY:   ${{ secrets.DATA_LAYER_SUPABASE_KEY }}
+          INTEL_LAYER_SUPABASE_URL:  ${{ secrets.INTEL_LAYER_SUPABASE_URL }}
+          INTEL_LAYER_SUPABASE_KEY:  ${{ secrets.INTEL_LAYER_SUPABASE_KEY }}
+          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          ASSET_FILTER:              BTC
+        run: python weekly_persistence.py
+</file>
+
+<file path="repomix-output2.xml">
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+.github/
+  workflows/
+    daily_engine.yml
+    weekly_engine.yml
+.gitignore
+config.py
+data_contract.py
+elasticity.py
+engine.py
+output_schema.py
+persistence.py
+repomix-output2.xml
+requirements.txt
+supabase_clients.py
+weekly_engine.py
+weekly_output_schema.py
+weekly_persistence.py
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path=".gitignore">
+# Secretos — NUNCA subir esto al repo
+.env
+*.env
+*.bak
+*.bak2
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Archivos de contexto generados localmente (files-to-prompt)
+contexto_*.txt
+contexto_*.utf8.txt
+</file>
+
+<file path="elasticity.py">
+"""
+elasticity.py — Paso 3 del roadmap: flags determinísticos de elasticidad
+Intelligence Layer / Arkad Tools
+
+Sin LLM. Una función pública: compute_elasticity_flags().
+
+NOTA DE ARQUITECTURA (leer antes de tocar el enganche en persistence.py)
+-------------------------------------------------------------------------
+De los 5 flags de la Sección 7 del doc fuente, 4 (cambio_fase,
+cambio_modificador, conflicto_detectado, conviccion_bajo) dependen del
+estado que el motor DECIDE en la corrida de hoy — no existen todavía en
+el momento en que armaríamos el prompt para esa misma corrida. No son
+pre-calculables sin haber ejecutado ya engine.run_engine().
+
+El único flag genuinamente pre-calculable ANTES de llamar a Gemini es
+sorpresa_calendario, porque sale de un dato duro ya calculado en
+Data Layer (calendar_metrics.zscore_6), sin pasar por juicio del LLM.
+
+Por eso esta función se usa DESPUÉS de run_engine(), no antes:
+comparás el output ya generado (today_estado) contra lo último guardado
+en asset_outputs (previous_state). Sirve para:
+  - persistir el historial de "qué tan movido viene el activo"
+  - la decisión de cron/alertas (Paso 2 de tu plan)
+  - previous_state de la corrida de MAÑANA sigue siendo el asset_outputs
+    de hoy, así que el ciclo se cierra solo día a día.
+
+El llamado a run_engine() en persistence.py queda sin elasticity_flags
+(como está hoy) — el default de engine.py ya es seguro ("si no hay
+flags, asumí que corresponde expandir"). Si más adelante querés que el
+motor se auto-instruya con estos flags en la MISMA corrida, hace falta
+un patrón de 2 llamadas a Gemini por corrida (una previa para tantear
+estado, otra final ya con flags) — duplica costo de API. No lo armé acá
+a propósito; avisame si lo querés así.
+"""
+
+CONVICCION_ORDER = {"BAJA": 0, "MEDIA": 1, "ALTA": 2}
+CALENDAR_SURPRISE_ZSCORE_THRESHOLD = 2.0
+
+EMPTY_FLAGS = {
+    "cambio_fase": False,
+    "cambio_modificador": False,
+    "conflicto_detectado": False,
+    "conviccion_bajo": False,
+    "sorpresa_calendario": False,
+}
+
+
+def _sorpresa_calendario(payload: dict, threshold: float = CALENDAR_SURPRISE_ZSCORE_THRESHOLD) -> bool:
+    """
+    True si algún evento reciente de calendario (payload['calendar_recent'])
+    tuvo una sorpresa estadísticamente extrema: |zscore_6| >= threshold.
+
+    zscore_6 viene de calendar_metrics (Data Layer) — dato duro ya
+    calculado, no depende de la corrida del motor. Casteo explícito a
+    float() porque Supabase puede devolver el numeric como str según el
+    cliente/driver.
+    """
+    for event in payload.get("calendar_recent", []) or []:
+        z = event.get("zscore_6")
+        if z is None:
+            continue
+        try:
+            if abs(float(z)) >= threshold:
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
+def compute_elasticity_flags(
+    today_estado: dict,
+    previous_state: dict | None,
+    payload: dict,
+) -> dict:
+    """
+    Compara la corrida de hoy contra la última guardada y devuelve los
+    5 flags determinísticos. Se llama DESPUÉS de run_engine() — ver nota
+    de arquitectura arriba.
+
+    today_estado:    dict con shape {"fase": str, "modificadores": list[str],
+                      "conviccion": str} — sale de
+                      output.estado.model_dump(mode="json") en persistence.py.
+    previous_state:  mismo shape + "as_of", leído de asset_outputs vía
+                      persistence.get_previous_state(), o None si es la
+                      primera corrida para este activo.
+    payload:         dict de data_contract.build_payload() — se usa solo
+                      para sorpresa_calendario (independiente de la memoria).
+
+    Devuelve el dict de 5 flags, listo para persistir.
+    """
+    flags = dict(EMPTY_FLAGS)
+    flags["sorpresa_calendario"] = _sorpresa_calendario(payload)
+
+    if previous_state is None:
+        # Primera corrida: nada contra qué comparar. sorpresa_calendario
+        # es la única excepción porque no depende de la memoria.
+        return flags
+
+    prev_fase = previous_state.get("fase")
+    prev_modificadores = set(previous_state.get("modificadores") or [])
+    prev_conviccion = previous_state.get("conviccion")
+
+    hoy_fase = today_estado.get("fase")
+    hoy_modificadores = set(today_estado.get("modificadores") or [])
+    hoy_conviccion = today_estado.get("conviccion")
+
+    flags["cambio_fase"] = bool(prev_fase) and hoy_fase != prev_fase
+    flags["cambio_modificador"] = hoy_modificadores != prev_modificadores
+
+    # conflicto_detectado: no es un cálculo aparte — es leer si el motor
+    # marcó el modificador contexto_conflictivo en la corrida de hoy
+    # (Sección 1.3 del doc: ese modificador ES la definición de
+    # conflicto_detectado, no hay una regla numérica paralela).
+    flags["conflicto_detectado"] = "contexto_conflictivo" in hoy_modificadores
+
+    if prev_conviccion in CONVICCION_ORDER and hoy_conviccion in CONVICCION_ORDER:
+        flags["conviccion_bajo"] = (
+            CONVICCION_ORDER[hoy_conviccion] < CONVICCION_ORDER[prev_conviccion]
+        )
+
+    return flags
+
+
+if __name__ == "__main__":
+    # Smoke test rápido sin tocar Supabase ni Gemini.
+    payload_stub = {
+        "calendar_recent": [
+            {"event_name": "CPI", "zscore_6": 2.4},
+            {"event_name": "NFP", "zscore_6": 0.3},
+        ]
+    }
+    previous = {"fase": "tendencia_madura", "modificadores": ["contexto_favorable"], "conviccion": "ALTA"}
+    today = {"fase": "exhaustion", "modificadores": ["contexto_conflictivo"], "conviccion": "MEDIA"}
+
+    flags = compute_elasticity_flags(today, previous, payload_stub)
+    print(flags)
+    assert flags == {
+        "cambio_fase": True,
+        "cambio_modificador": True,
+        "conflicto_detectado": True,
+        "conviccion_bajo": True,
+        "sorpresa_calendario": True,
+    }
+    print("OK")
+</file>
+
+<file path="output_schema.py">
+"""
+output_schema.py — Schema de salida del Asset Translator
+Intelligence Layer / Arkad Tools
+
+Mapea 1:1 la estructura del doc fuente:
+  Sección 1  -> EstadoActivo (Fase x Modificador, Convicción)
+  Sección 2  -> AssetTranslatorOutput (frase puente, traducción macro, criolla)
+  Sección 4  -> Hipotesis (4 componentes)
+  Sección 5  -> Paranoia (5 preguntas con evidencia obligatoria)
+  Sección 6  -> Memoria (comparación contra la hipótesis anterior)
+
+Usado como response_schema en la llamada a Gemini — la API valida que
+el modelo devuelva exactamente esta forma, sin parseo de markdown.
+"""
+
+from typing import Literal
+from pydantic import BaseModel, Field
+
+
+# --- Sección 1.2: Fase del ciclo (tabla de criterios del doc) ---
+FaseCiclo = Literal[
+    "price_discovery",
+    "tendencia_madura",
+    "acumulacion",
+    "distribucion",
+    "consolidacion",
+    "exhaustion",
+    "cambio_de_regimen",
+]
+
+# --- Sección 1.3: Modificador de contexto (puede ser más de uno) ---
+ModificadorContexto = Literal[
+    "contexto_favorable",
+    "contexto_conflictivo",
+    "esperando_catalizadores",
+    "desacople_intermarket",
+    "contexto_turbulento",
+]
+
+Conviccion = Literal["ALTA", "MEDIA", "BAJA"]
+
+# --- Sección 6: clasificación de la hipótesis anterior contra la actual ---
+EstadoHipotesisPrevia = Literal[
+    "vigente_sin_cambios",
+    "vigente_fortalecida",
+    "vigente_debilitada",
+    "invalidada",
+    "no_aplica_primera_corrida",
+]
+
+
+class EstadoActivo(BaseModel):
+    """Sección 1 — el titular compuesto Fase x Modificador."""
+    fase: FaseCiclo
+    modificadores: list[ModificadorContexto] = Field(
+        description="Uno o más. Ver Sección 1.3 del doc — pueden coexistir."
+    )
+    conviccion: Conviccion
+    evidence_keys: list[str] = Field(
+        description=(
+            "Claves concretas del payload que sostienen la fase elegida "
+            "(ej. 'pricing.current.zscore_1d', 'cot.snapshots.current.m_money_percentile_5y'). "
+            "Ancla anti-alucinación exigida por la Sección 1.2 del doc."
+        )
+    )
+
+
+class Hipotesis(BaseModel):
+    """Sección 4 — los 4 componentes, no 2."""
+    sostiene: str = Field(description="Evidencia actual que apoya el escenario.")
+    debilita: str = Field(
+        description="Evidencia actual en contra, sin llegar a invalidar. Presente, no futuro."
+    )
+    invalidaria: str = Field(
+        description="Condición futura falseable que rompería la tesis. Futuro, no presente."
+    )
+    podria_acelerarla: str = Field(
+        description="Condición futura que confirmaría/reforzaría el escenario más rápido."
+    )
+
+
+class Paranoia(BaseModel):
+    """Sección 5 — cada pregunta requiere evidencia concreta, no reflexión genérica."""
+    que_estoy_ignorando: str = Field(
+        description="Una métrica del payload NO mencionada en la traducción macro, y por qué se consideró secundaria."
+    )
+    que_me_hace_ruido: str = Field(
+        description="Una métrica cuyo signo/magnitud es inconsistente con el resto del relato."
+    )
+    que_metrica_no_termina_de_cerrar: str = Field(
+        description="Un dato con confianza baja en sí mismo (poca profundidad histórica, ventana corta, etc.), no una duda filosófica."
+    )
+    que_podria_cambiar_la_opinion: str = Field(
+        description="Debe ser la misma condición de 'invalidaria' reformulada de cara a la semana próxima, no una idea nueva."
+    )
+    variable_a_vigilar: str = Field(
+        description="UNA sola variable explícita, no una lista. Fuerza a priorizar."
+    )
+    contexto_limpio: bool = Field(
+        description="True si genuinamente no hay nada real que objetar esta semana (ver Sección 5, regla de diseño clave)."
+    )
+
+
+class Memoria(BaseModel):
+    """Sección 6 — comparación contra la corrida anterior."""
+    estado_hipotesis_previa: EstadoHipotesisPrevia
+    explicacion: str = Field(
+        description="Si invalidada, debe citar explícitamente qué condición de 'invalidaria' se cruzó."
+    )
+    variable_vigilada_semana_pasada_aparecio_hoy: bool = Field(
+        description="False si es la primera corrida (no hay variable previa que comparar) o si no apareció. True si se mencionó en la traducción macro de hoy."
+    )
+
+
+class AssetTranslatorOutput(BaseModel):
+    """Objeto completo devuelto por el motor — una corrida = un objeto."""
+
+    estado: EstadoActivo
+
+    frase_puente: str = Field(
+        description=(
+            "1 frase (Sección 2 del doc: 'En una frase'). Bisagra entre el "
+            "titular técnico y la traducción macro completa — regla de los 10 segundos."
+        )
+    )
+
+    traduccion_macro: str = Field(
+        description=(
+            "Sección 3. Largo variable según triggers de elasticidad (ver Sección 7). "
+            "Debe anclarse a los criterios de la fase elegida en 'estado.fase', "
+            "no ser texto genérico con la fase pegada arriba."
+        )
+    )
+
+    en_criollo: str = Field(
+        description="Espejo de traduccion_macro en lenguaje informal. NUNCA introduce información nueva."
+    )
+
+    hipotesis: Hipotesis
+    paranoia: Paranoia
+    memoria: Memoria
+</file>
+
+<file path="requirements.txt">
+supabase>=2.4.0
+python-dotenv>=1.0.0
+google-genai>=1.2.0
+pydantic>=2.9.0
+</file>
+
+<file path="supabase_clients.py">
+"""
+supabase_clients.py — Conexiones a los dos proyectos Supabase
+Intelligence Layer / Arkad Tools
+
+Data Layer   (solo lectura): pricing_metrics, cot_metrics, fred_metrics,
+                              calendar_metrics, sentiment_metrics,
+                              pricing_correlations, economic_calendar_events
+Intel Layer  (lectura/escritura): asset_outputs, asset_history,
+                                   hypotheses_history
+
+Misma convención que los extractores existentes: dotenv + create_client.
+"""
+
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+from supabase import create_client, Client
+
+# Ruta explícita (no depende de desde dónde se ejecute el script) y
+# utf-8-sig para tolerar el BOM que Notepad/algunos editores de Windows
+# agregan al guardar el .env — sin esto, la primera variable del archivo
+# puede no parsearse aunque el archivo "se vea" bien.
+load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env", encoding="utf-8-sig")
+
+
+def _client_from_env(url_var: str, key_var: str) -> Client:
+    url = os.environ.get(url_var, "").strip()
+    key = os.environ.get(key_var, "").strip()
+    if not url or not key:
+        raise EnvironmentError(
+            f"{url_var} y {key_var} deben estar seteadas como variables de entorno."
+        )
+    return create_client(url, key)
+
+
+def get_data_layer_client() -> Client:
+    return _client_from_env("DATA_LAYER_SUPABASE_URL", "DATA_LAYER_SUPABASE_KEY")
+
+
+def get_intel_layer_client() -> Client:
+    return _client_from_env("INTEL_LAYER_SUPABASE_URL", "INTEL_LAYER_SUPABASE_KEY")
+</file>
+
+<file path="weekly_engine.py">
+"""
+weekly_engine.py — Motor del Weekly Recap
+Intelligence Layer / Arkad Tools
+
+run_weekly_engine(...) es el único punto de entrada. Llama a Gemini con
+response_schema=WeeklyRecapOutput y devuelve el objeto ya validado.
+
+El system prompt codifica las reglas conceptuales acordadas:
+  - Frontera Intelligence Layer / Data Layer (no exponer nomenclatura interna).
+  - Variables a vigilar en lenguaje natural, nunca paths técnicos.
+  - Honestidad narrativa (no implicar observación completa si la semana es parcial).
+  - Weekly confidence con 4 factores explícitos, no un campo de criterio libre.
+  - Week completeness: no abortar, avisar, no inferir días faltantes.
+  - Principio fundamental: no es un segundo motor de inteligencia.
+
+Además de las reglas del prompt, hay 2 anclas anti-alucinación reforzadas
+en código (mismo criterio que elasticity.py aplica a sorpresa_calendario:
+lo que se puede verificar con un chequeo determinístico no queda librado
+al criterio del modelo):
+  1. weekly_confidence no puede ser HIGH si la semana está incompleta.
+  2. Si se cuela nomenclatura del Data Layer (fred.xxx, cot.xxx, DGS10,
+     zscore, etc.) en variables_a_vigilar o que_aprendio_sentinel, se
+     loguea una advertencia visible (no se corrige el texto solo — 
+     reescribir contenido generado es más riesgoso que avisar y dejar
+     que ajustes el prompt si se repite).
+"""
+
+import json
+import re
+import os
+from google import genai
+from google.genai import types
+
+from weekly_output_schema import WeeklyRecapOutput
+
+# gemini-3.5-flash tenía cuota gratuita de solo 20 req/día (mismo
+# problema que ya resolvimos en engine.py). Se usa el alias, no un ID
+# fijo: los IDs fijos aparecen en ListModels pero Google los bloquea
+# para generateContent en cuentas nuevas — el alias apunta siempre al
+# modelo Flash-Lite habilitado para la cuenta en cada momento.
+MODEL_NAME = "gemini-flash-lite-latest"
+
+SYSTEM_PROMPT = """Sos Sentinel, la capa de inteligencia macro de Arkad Tools. \
+Tu única función es leer los outputs diarios que el motor de caracterización \
+de Estado (Asset Translator) generó durante la semana para UN activo, y \
+resumir cómo evolucionó su narrativa.
+
+## Frontera Intelligence Layer / Data Layer
+El Weekly Recap vive 100% en la Intelligence Layer. NUNCA expone nombres de \
+métricas, paths del payload ni nomenclatura interna del Data Layer (fred.xxx, \
+cot.xxx, pricing.xxx, zscore, percentile, tickers como DGS10 o m_money_net). \
+El lector nunca debería necesitar conocer el nombre de una métrica para \
+entender las conclusiones del motor — todo se traduce a concepto o driver \
+macro en lenguaje natural.
+
+## Variables a vigilar
+Se expresan como preguntas o conceptos, nunca como paths técnicos.
+Correcto: "¿Los fondos especulativos continuarán acumulando posiciones?", \
+"¿Las tasas de largo plazo comenzarán a relajarse?", "¿La próxima reunión \
+de la Fed modificará las expectativas del mercado?".
+Incorrecto: "cot.snapshots.current.m_money_net", "fred.DGS10.current.zscore", \
+"correlation_252d.vix_zscore".
+
+## Honestidad narrativa
+Nunca uses expresiones que impliquen una observación completa de la semana \
+si el recap fue generado con información parcial. Evitá: "durante toda la \
+semana", "se observó consistentemente que", "el activo se comportó de \
+forma sostenida" — cuando runs_used < runs_expected. Usá en su lugar: "en \
+las corridas disponibles de la semana", "la narrativa observada se mantuvo \
+intacta", "la información disponible sugiere que...", "no se observaron \
+cambios significativos en los registros disponibles". La ausencia de \
+información NUNCA debe interpretarse como evidencia de un cambio narrativo.
+
+## Weekly confidence
+NO representa una predicción de mercado — representa el nivel de claridad \
+que tenés sobre la evolución narrativa de la semana. Para asignarlo, \
+considerá explícitamente estos 4 factores:
+1. Completitud de la semana (runs_used vs. runs_expected).
+2. Consistencia de la narrativa observada.
+3. Estado de las hipótesis (fortalecidas, debilitadas, abiertas o \
+   contradictorias entre sí).
+4. Si hay suficiente información para extraer conclusiones robustas.
+
+HIGH: semana completa o casi completa + narrativas consistentes + \
+hipótesis claras y alineadas con las observaciones.
+MEDIUM: información parcial o señales mixtas + hipótesis abiertas o \
+parcialmente fortalecidas.
+LOW: información insuficiente o narrativas contradictorias — no se pueden \
+extraer conclusiones narrativas robustas.
+
+## Week completeness
+Te paso runs_expected y runs_used. Si runs_used < runs_expected: generá \
+igual el recap (nunca abortes — el objetivo es caracterizar incertidumbre, \
+no dejar de producir inteligencia), completá nota_completitud explícitamente \
+(ej. "Este Weekly Recap fue generado utilizando 4 de las 5 corridas \
+esperadas para la semana. Algunas narrativas podrían encontrarse \
+incompletas."), y no infieras narrativas que dependan de los días \
+faltantes. Si runs_used == runs_expected, nota_completitud queda en null.
+
+## Principio fundamental
+El Weekly Recap NO explica qué ocurrió en el mercado. Explica qué aprendió \
+Sentinel sobre la evolución narrativa del activo durante la semana. Una \
+semana sin cambios significativos es una conclusión perfectamente válida y \
+constituye inteligencia útil.
+
+## Reglas generales
+- Priorizá cambios narrativos sobre movimientos de precio.
+- Priorizá contexto macro sobre volatilidad diaria.
+- No inventes narrativas que no hayan aparecido en los outputs diarios.
+- Tono institucional y objetivo. Sin lenguaje de trading ("comprar", \
+  "vender", "target", etc.).
+- Español rioplatense, directo, sin relleno corporativo.
+"""
+
+_LEAKED_NOMENCLATURE_PATTERN = re.compile(
+    r"\b(fred|cot|pricing|correlations|calendar)\.[a-zA-Z_0-9]+"
+    r"|\bDGS(10|2|5)\b|\bm_money_net\b|\bzscore\b|\bcorr_252d\b",
+    re.IGNORECASE,
+)
+
+
+def _get_client() -> genai.Client:
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        raise EnvironmentError("GEMINI_API_KEY debe estar seteada como variable de entorno.")
+    return genai.Client(api_key=api_key)
+
+
+def _build_user_prompt(
+    asset_display_name: str,
+    week_start,
+    week_end,
+    daily_runs: list[dict],
+    hypotheses_week: list[dict],
+    previous_weekly_recap: dict | None,
+    runs_expected: int,
+    runs_used: int,
+) -> str:
+    parts = [
+        f"# Weekly Recap de {asset_display_name} — semana {week_start} a {week_end}",
+        f"runs_expected: {runs_expected} | runs_used: {runs_used}",
+        "\n# Corridas diarias de la semana (asset_history, orden cronológico)",
+        "```json",
+        json.dumps(daily_runs, indent=2, default=str, ensure_ascii=False),
+        "```",
+        "\n# Evolución de hipótesis de la semana (hypotheses_history)",
+        "```json",
+        json.dumps(hypotheses_week, indent=2, default=str, ensure_ascii=False),
+        "```",
+    ]
+
+    if previous_weekly_recap:
+        parts += [
+            "\n# Weekly Recap de la semana anterior (para la comparación)",
+            "```json",
+            json.dumps(previous_weekly_recap, indent=2, default=str, ensure_ascii=False),
+            "```",
+        ]
+    else:
+        parts.append("\n# No hay Weekly Recap anterior — es la primera semana con historial suficiente.")
+
+    return "\n".join(parts)
+
+
+def _warn_if_leaked_nomenclature(output: WeeklyRecapOutput) -> None:
+    """
+    No corrige nada (reescribir texto generado es más riesgoso que dejarlo
+    pasar) — solo deja un log visible si se coló nomenclatura del Data
+    Layer, para notarlo en la corrida y ajustar el prompt si se repite.
+
+    Revisa TODOS los campos de texto libre del output, no solo los que
+    parecían más propensos a filtrarse — un leak en, por ejemplo,
+    sorpresas_semana es tan grave como uno en variables_a_vigilar.
+    """
+    text_fields = [
+        output.que_aprendio_sentinel,
+        output.narrativas_cambiaron,
+        output.sorpresas_semana,
+        output.comparacion_semana_anterior,
+        output.nota_completitud,
+        output.evolucion_hipotesis.fortalecidas,
+        output.evolucion_hipotesis.debilitadas,
+        output.evolucion_hipotesis.validadas,
+        output.evolucion_hipotesis.abiertas,
+        *output.lo_mas_importante,
+        *output.variables_a_vigilar,
+    ]
+    joined = " ".join(f for f in text_fields if f)
+    if _LEAKED_NOMENCLATURE_PATTERN.search(joined):
+        print("[weekly_engine] ADVERTENCIA: se detectó posible nomenclatura del Data Layer en el output.")
+
+
+def run_weekly_engine(
+    asset_display_name: str,
+    week_start,
+    week_end,
+    daily_runs: list[dict],
+    hypotheses_week: list[dict],
+    previous_weekly_recap: dict | None,
+    runs_expected: int,
+    runs_used: int,
+) -> WeeklyRecapOutput:
+    """Punto de entrada único del motor Weekly Recap."""
+    client = _get_client()
+    user_prompt = _build_user_prompt(
+        asset_display_name, week_start, week_end,
+        daily_runs, hypotheses_week, previous_weekly_recap,
+        runs_expected, runs_used,
+    )
+
+    response = client.models.generate_content(
+        model=MODEL_NAME,
+        contents=user_prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            response_mime_type="application/json",
+            response_schema=WeeklyRecapOutput,
+            temperature=0.2,
+        ),
+    )
+
+    result: WeeklyRecapOutput = response.parsed
+    if result is None:
+        raise ValueError(f"Gemini no devolvió un objeto parseable. Respuesta cruda: {response.text[:2000]}")
+
+    # Ancla anti-alucinación 1: la completitud es un dato duro ya
+    # calculado, no depende del criterio del LLM.
+    if runs_used < runs_expected and result.weekly_confidence == "HIGH":
+        result.weekly_confidence = "MEDIUM"
+        if not result.nota_completitud:
+            result.nota_completitud = (
+                f"Este Weekly Recap fue generado utilizando {runs_used} de las "
+                f"{runs_expected} corridas esperadas para la semana."
+            )
+
+    # Ancla anti-alucinación 2: aviso (no corrección automática) si se
+    # coló nomenclatura del Data Layer.
+    _warn_if_leaked_nomenclature(result)
+
+    return result
+</file>
+
+<file path="weekly_output_schema.py">
+"""
+weekly_output_schema.py — Schema de salida del Weekly Recap
+Intelligence Layer / Arkad Tools
+
+Mapea 1:1 el "Output esperado" del instructivo Weekly Recap.
+Usado como response_schema en la llamada a Gemini — misma disciplina
+que output_schema.py del motor diario, la API valida la forma exacta.
+"""
+
+from typing import Literal
+from pydantic import BaseModel, Field
+
+WeeklyConfidence = Literal["HIGH", "MEDIUM", "LOW"]
+
+
+class EvolucionHipotesis(BaseModel):
+    """Los 4 sub-campos de 'Evolución de las hipótesis' del instructivo."""
+    fortalecidas: str = Field(description="Qué hipótesis se fortalecieron esta semana y por qué. 'Ninguna' si no aplica.")
+    debilitadas: str = Field(description="Qué hipótesis se debilitaron esta semana. 'Ninguna' si no aplica.")
+    validadas: str = Field(description="Qué hipótesis fueron validadas por los acontecimientos de la semana. 'Ninguna' si no aplica.")
+    abiertas: str = Field(description="Qué hipótesis continúan abiertas, sin resolución esta semana.")
+
+
+class WeeklyRecapOutput(BaseModel):
+    """Objeto completo devuelto por el motor — una corrida = un recap semanal de un activo."""
+
+    lo_mas_importante: list[str] = Field(
+        description="3-4 bullets con lo más relevante de la semana, en lenguaje natural. Puede ser una sola línea si no hubo novedades."
+    )
+    que_aprendio_sentinel: str = Field(
+        description=(
+            "Resumen ejecutivo de cómo evolucionó el contexto macro y las narrativas "
+            "predominantes esta semana. Debe ser honesto sobre la completitud de la "
+            "información: si la semana fue parcial, evitar frases que impliquen haber "
+            "observado toda la semana ('durante toda la semana', 'de forma consistente', "
+            "'de forma sostenida') y usar en su lugar formulaciones como 'en las corridas "
+            "disponibles de la semana' o 'la información disponible sugiere que...'."
+        )
+    )
+    narrativas_cambiaron: str = Field(
+        description="Qué cambió significativamente vs. qué mantuvo intacta su tesis principal."
+    )
+    evolucion_hipotesis: EvolucionHipotesis
+    sorpresas_semana: str = Field(
+        description="Comportamientos inesperados o contradicciones. 'No hay sorpresas relevantes esta semana' es una respuesta válida y preferible a inventar una."
+    )
+    comparacion_semana_anterior: str = Field(
+        description="Comparación contra el weekly recap anterior. 'Primera semana con historial suficiente' si no se pasó recap previo."
+    )
+    variables_a_vigilar: list[str] = Field(
+        description=(
+            "Drivers macro relevantes para la próxima semana, en LENGUAJE NATURAL — "
+            "preguntas o conceptos, nunca nomenclatura del Data Layer. Correcto: "
+            "'¿Los fondos especulativos continuarán acumulando posiciones?', "
+            "'¿Las tasas de largo plazo comenzarán a relajarse?'. Incorrecto: "
+            "'cot.snapshots.current.m_money_net', 'fred.DGS10.current.zscore' — "
+            "esos paths NUNCA deben aparecer acá ni en ningún otro campo del output."
+        )
+    )
+
+    weekly_confidence: WeeklyConfidence = Field(
+        description=(
+            "Nivel de claridad que Sentinel tiene sobre la evolución narrativa de la "
+            "semana — NO una predicción de mercado. Considera: completitud de la "
+            "semana, consistencia narrativa, estado de las hipótesis, y si hay "
+            "información suficiente para conclusiones robustas. No debería ser HIGH "
+            "si la semana está incompleta (runs_used < runs_expected) — igual, no "
+            "confíes solo en tu propio criterio para esto: el caller lo fuerza a "
+            "MEDIUM si hace falta."
+        )
+    )
+    nota_completitud: str = Field(
+        description=(
+            "Si runs_used < runs_expected, frase explícita avisando que el recap es "
+            "parcial (ej. 'Este Weekly Recap fue generado utilizando 4 de las 5 "
+            "corridas esperadas para la semana.'). Si la semana está completa "
+            "(runs_used == runs_expected), devolvé un string vacío '' — el campo es "
+            "obligatorio y no acepta ausencia de valor (limitación de la API de Gemini)."
+        )
+    )
+</file>
+
+<file path="engine.py">
+"""
+
+engine.py — Paso 2 del roadmap: el motor de caracterización de Estado
+
+Intelligence Layer / Arkad Tools
+
+
+
+run_engine(payload, previous_hypothesis, elasticity_flags) es el único
+
+punto de entrada. Llama a Gemini con response_schema=AssetTranslatorOutput
+
+y devuelve el objeto ya validado (sin parseo de markdown).
+
+
+
+El prompt de sistema codifica las reglas del documento fuente que NO
+
+pueden quedar libradas al criterio del modelo en cada corrida:
+
+  - Tabla Eje A (fases) y Eje B (modificadores) — Sección 1.2 / 1.3
+
+  - Regla de convicción (alineación en 3 horizontes) — Sección 1.4
+
+  - Reglas de anclaje por fase — Sección 3
+
+  - Distinción presente/futuro en hipótesis — Sección 4
+
+  - Evidencia obligatoria en paranoia — Sección 5
+
+  - Triggers de elasticidad calculados afuera, no a criterio libre — Sección 7
+
+"""
+
+
+
+import json
+
+import os
+
+import time
+
+from datetime import date
+
+
+
+from google import genai
+
+from google.genai import types
+
+
+
+from output_schema import AssetTranslatorOutput
+
+
+
+MODEL_NAME = "gemini-flash-lite-latest"
+
+
+
+# --- Retry para errores transitorios del lado de Gemini (Paso 2) ---
+
+# 503 UNAVAILABLE ("high demand") y 429 RESOURCE_EXHAUSTED son errores del
+
+# SERVIDOR de Gemini, no de nuestro payload/prompt — no tiene sentido
+
+# fallar toda la corrida de un activo por esto. Backoff exponencial:
+
+# 8s, 16s, 32s, 64s. Si a la 5ta sigue fallando, ahí sí es un problema
+
+# real (API key, cuota agotada del día, etc.) y se deja propagar el error.
+
+MAX_GENERATE_RETRIES = 5
+
+RETRY_BASE_DELAY_SECONDS = 8
+
+
+
+
+
+def _is_transient_error(exc: Exception) -> bool:
+
+    """True si el error es un problema temporal del lado de Gemini (no del
+
+    payload ni del prompt), y por lo tanto vale la pena reintentar."""
+
+    code = getattr(exc, "code", None)
+
+    if code in (429, 500, 503):
+
+        return True
+
+    text = str(exc)
+
+    return any(marker in text for marker in ("503", "429", "UNAVAILABLE", "RESOURCE_EXHAUSTED"))
+
+
+
+
+
+def _generate_content_with_retry(client: genai.Client, **kwargs):
+
+    last_exc: Exception | None = None
+
+    for attempt in range(1, MAX_GENERATE_RETRIES + 1):
+
+        try:
+
+            return client.models.generate_content(**kwargs)
+
+        except Exception as exc:
+
+            last_exc = exc
+
+            is_last_attempt = attempt == MAX_GENERATE_RETRIES
+
+            if not _is_transient_error(exc) or is_last_attempt:
+
+                raise
+
+            delay = RETRY_BASE_DELAY_SECONDS * (2 ** (attempt - 1))
+
+            print(
+
+                f"[engine] Gemini no disponible (intento {attempt}/{MAX_GENERATE_RETRIES}). "
+
+                f"Reintentando en {delay}s... ({exc})"
+
+            )
+
+            time.sleep(delay)
+
+    # Inalcanzable en la práctica (el raise del loop cubre todos los casos),
+
+    # pero deja explícito el contrato de la función para mypy/lectores.
+
+    raise last_exc
+
+
+
+SYSTEM_PROMPT = """Sos el motor de un Asset Translator macro. Tu trabajo es \
+
+traducir un payload de métricas cuantitativas de un activo en una lectura \
+
+de estado + hipótesis + paranoia, siguiendo reglas de diseño estrictas. \
+
+No sos un oráculo: tu credibilidad depende de mostrar evidencia concreta \
+
+y de admitir cuándo algo no cierra, no de sonar seguro.
+
+
+
+## Eje A — Fase del ciclo (elegí UNA, con criterio orientador, no rígido)
+
+
+
+| Fase | Patrón típico en los datos |
+
+|---|---|
+
+| price_discovery | Precio en zonas extremas (pct_rank_1y/3y/5y muy alto o bajo, |z-score|>2), momentum sostenido en los 3 snapshots |
+
+| tendencia_madura | Dirección consistente en los 3 snapshots, pero el momentum (return_1m/3m) desacelera vs. hace 4-12 semanas |
+
+| acumulacion | Posicionamiento institucional (m_money/swap percentile) subiendo desde base baja, mientras precio lateral/comprimido |
+
+| distribucion | Posicionamiento institucional cayendo desde percentil alto, precio todavía no lo refleja |
+
+| consolidacion | zscore de precio cerca de 0, variaciones cortas chicas, drivers estructurales sin sesgo claro |
+
+| exhaustion | Percentil de posicionamiento en extremo (>90 o <10) + desaceleración de momentum |
+
+| cambio_de_regimen | Los datos de hoy divergen de los snapshots w4/w12 en algo que antes era cierto y dejó de serlo |
+
+
+
+Si elegís una fase, tenés que poder señalar en `evidence_keys` la(s) clave(s) \
+
+concretas del payload que la sostienen. Esto es el ancla anti-alucinación.
+
+
+
+## Eje B — Modificador de contexto (0, 1, o más — no son excluyentes)
+
+
+
+- contexto_favorable: estructura y catalizadores apuntan en la misma dirección
+
+- contexto_conflictivo: conflicto entre estructura y catalizador táctico reciente
+
+- esperando_catalizadores: hay eventos de calendario de alto impacto próximos (ver calendar_upcoming) sin conflicto ni cambio reciente
+
+- desacople_intermarket: una correlación clave está en zscore/percentil extremo (ver correlations, campo corr_252d_zscore_2y — extremo es |zscore| > ~1.5 o percentil <10/>90)
+
+- contexto_turbulento: múltiples métricas simultáneamente extremas o conflictivas, no un solo punto
+
+
+
+## Regla de convicción
+
+ALTA si los 3 snapshots (current/w4/w12) muestran consistentemente la misma \
+
+fase. MEDIA/BAJA si hay ambigüedad entre fases contiguas (ej. tendencia \
+
+madura vs. exhaustion). Decilo explícitamente, no fuerces una sola etiqueta \
+
+con confianza que no tenés.
+
+
+
+## Reglas de anclaje de contenido por fase (traduccion_macro)
+
+- Si fase = acumulacion: hablá de posicionamiento construyéndose \
+
+  silenciosamente, NO de momentum de precio (en acumulación el precio \
+
+  típicamente no se mueve todavía).
+
+- Si fase = exhaustion: el foco tiene que estar en el desgaste del \
+
+  combustible (percentiles extremos), más que en el nivel de precio.
+
+- Si fase = cambio_de_regimen: contrastá explícitamente en el texto \
+
+  "lo que era cierto hace 4-12 semanas" contra "lo que es cierto hoy" \
+
+  — es la única fase donde este contraste debe ser explícito en el texto, \
+
+  no solo interno.
+
+El contenido tiene que estar anclado a los criterios que sostienen la fase \
+
+elegida, no ser texto genérico con la fase pegada arriba.
+
+
+
+## en_criollo
+
+Explicación en lenguaje simple y llano, pensada para alguien SIN \
+
+conocimientos de finanzas ni de mercados — no un trader, una persona \
+
+común. Dos cosas prohibidas por igual:
+
+1. Nada de jerga de trading ni lunfardo forzado ("largar los trapos", \
+
+   "los gordos de las mesas", etc.) — no es un chat entre traders.
+
+2. Nada de tecnicismos disfrazados — no menciones zscore, percentil, \
+
+   SMA, DGS10, ni cites las cifras crudas. Traducí todo a causa y \
+
+   efecto: "los grandes inversores se retiraron", "el oro bajó porque \
+
+   subieron las tasas de interés en EEUU", "hay poca gente operando, \
+
+   así que el movimiento es débil aunque el precio caiga".
+
+El objetivo es que alguien sin ninguna formación financiera entienda \
+
+QUÉ pasó y POR QUÉ, sin necesitar traducir la jerga ni la estadística. \
+
+NUNCA introduce información nueva que no esté en traduccion_macro — es \
+
+el mismo contenido, en otro registro.
+
+
+
+## Hipótesis (4 componentes — la distinción presente/futuro es la clave)
+
+- sostiene / debilita: PRESENTE. Ya está pasando, no alcanza para invalidar.
+
+- invalidaria / podria_acelerarla: FUTURO. Todavía no pasó, pero rompería \
+
+  o reforzaría la tesis si pasa.
+
+No mezcles los tiempos verbales — esa distinción es la que le da humildad \
+
+intelectual real al motor, no cosmética.
+
+
+
+## Paranoia — cada pregunta necesita evidencia concreta del payload, no reflexión libre
+
+- que_estoy_ignorando: una métrica que EXISTE en el payload pero no mencionaste en traduccion_macro
+
+- que_me_hace_ruido: una métrica cuyo signo/magnitud es inconsistente con el resto (el outlier del propio payload)
+
+- que_metrica_no_termina_de_cerrar: un dato con confianza baja EN SÍ MISMO (poca historia, sample_size chico en correlaciones, calendar sin zscore_6 por falta de profundidad histórica) — no una duda filosófica
+
+- que_podria_cambiar_la_opinion: la MISMA condición de 'invalidaria', reformulada de cara a la semana próxima. No es una idea nueva.
+
+- variable_a_vigilar: UNA sola, explícita. No una lista.
+
+- contexto_limpio: true SOLO si genuinamente no hay nada real que objetar. \
+
+  Es preferible decir "contexto inusualmente limpio" que inventar una \
+
+  objeción floja para llenar el campo.
+
+
+
+## Disciplina de citado — evidence_keys (regla anti-alucinación reforzada)
+
+`evidence_keys` NO es un resumen de 4 datos lindos: tiene que incluir \
+
+UNA clave por cada fuente de datos que menciones en `traduccion_macro` \
+
+o `en_criollo`. Si hablás de posicionamiento COT, tiene que haber al \
+
+menos una clave `cot.*`. Si citás una correlación, tiene que haber una \
+
+clave `correlations.*`. Si citás ETF Flows (BTC), tiene que haber al \
+
+menos una clave `etf_flows.*`. Si el texto menciona una fuente que no está \
+
+en `evidence_keys`, eso es un error de consistencia — revisá antes de \
+
+responder que cada dato citado en el texto tenga su clave correspondiente.
+
+
+
+## Uso de trayectoria, no solo foto actual
+
+El payload trae 3 horizontes (current/w4/w12) para pricing, cot y cada \
+
+serie de fred — úsalos. No describas un percentil o zscore como dato \
+
+estático ("el Open Interest está en percentil 5") sin decir si viene \
+
+subiendo, bajando, o estable en las últimas 4-12 semanas. La dirección \
+
+del cambio suele ser más informativa que el nivel puntual.
+
+
+
+## Categorías COT — usalas ambas, con roles distintos
+
+El payload trae `cot.primary_field_prefix` (Managed Money — posicionamiento \
+
+especulativo) y `cot.secondary_field_prefix` (Swap — dealers/bancos, \
+
+posicionamiento de intermediación). Son roles distintos, no redundantes: \
+
+mencioná ambas cuando hables de COT, no solo la primaria. dealer_net, \
+
+asset_mgr_net y lev_money_net vienen SIEMPRE null para este activo — no \
+
+es un hueco del análisis, es porque esas categorías pertenecen al dataset \
+
+TFF (equity/bonos/FX) y este activo usa el dataset disaggregated. No lo \
+
+menciones como limitación de tu análisis.
+
+
+
+## ETF Flows — rol institucional equivalente a COT (solo BTC)
+
+
+
+El payload de BTC trae `etf_flows.TOTAL` con los mismos 3 horizontes \
+
+que el resto de las fuentes (`current`/`w4`/`w12`), cada uno con: \
+
+`flow`, `rolling_sum_5d`, `rolling_sum_20d`, `sma_5`, `sma_20`, \
+
+`trend_5v20`, `pct_rank_1y`, `pct_rank_since_inception`, `zscore`, \
+
+`streak_days`, `cumulative_flow_ytd`, `cumulative_flow_since_inception` \
+
+y `regime`. Para BTC esto ocupa el mismo rol que COT ocupa para GOLD \
+
+y el resto de los activos institucionales — no es una fuente \
+
+secundaria ni un dato accesorio, tratalo con el mismo peso que le \
+
+das a COT en otros activos.
+
+ETF Flows NO es una señal de compra/venta ni un proxy de momentum de \
+
+precio. Mide participación institucional real — el flujo de entrada \
+
+o salida en los ETFs spot de BTC —, independiente de hacia dónde vaya \
+
+el precio. Un flujo positivo NO implica BTC alcista; un flujo \
+
+negativo NO implica BTC bajista. Nunca lo uses para inferir \
+
+dirección de precio ni objetivos futuros por sí solo — su función \
+
+es fortalecer, debilitar o poner en conflicto la hipótesis que ya \
+
+estás construyendo con el resto del payload (precio, COT, macro), \
+
+no predecir.
+
+Cómo leer cada campo:
+
+
+
+- `regime` (acumulacion/distribucion/neutral): el estado institucional actual, ya clasificado a partir de rolling_sum_20d y trend_5v20 — no lo recalcules, usalo como el titular de esta fuente.
+
+- `streak_days`: persistencia del flujo (positivo = racha de días de entrada, negativo = racha de salida, magnitud = cuántos días seguidos). Una racha larga pesa más como evidencia que un solo día extremo aislado.
+
+- `trend_5v20` (sma_5 menos sma_20): si el flujo reciente se está acelerando o desacelerando respecto al último mes — importa la dirección del cambio, no solo el nivel del día.
+
+- `pct_rank_1y`, `pct_rank_since_inception` y `zscore`: si el flujo de hoy es estadísticamente normal o extraordinario contra su propia historia — usalos para calibrar si algo amerita mención o es ruido de todos los días.
+
+- `rolling_sum_20d` da contexto táctico (últimas ~4 semanas); `cumulative_flow_ytd` y `cumulative_flow_since_inception` dan contexto estructural (¿la adopción institucional es un fenómeno reciente o de todo el ciclo del producto?).
+
+
+
+Usalo para leer trayectoria, no una foto fija: compará `current` \
+
+contra `w4` y `w12` igual que hacés con pricing/COT/FRED — un \
+
+regime que se sostiene en los 3 horizontes pesa distinto que uno \
+
+que recién cambió hoy.
+
+Cómo pesa sobre la hipótesis (Sección Hipótesis y Paranoia):
+
+
+
+- ETF Flows fortaleciéndose (regime=acumulacion, streak positivo, trend_5v20>0) alineado con el resto del payload → fortalece la hipótesis vigente; subí convicción si corresponde.
+
+- ETF Flows debilitándose o en regime=distribucion mientras precio o macro sostienen la hipótesis contraria → esto es evidencia de "debilita" en Hipótesis; si el conflicto es agudo, puede justificar el modificador `contexto_conflictivo` (Eje B).
+
+- Precio debilitándose + ETF Flows fortaleciéndose (o viceversa) → desacople entre precio y participación institucional; puede alimentar `desacople_intermarket` si es marcado, o quedar como tensión a nombrar en `paranoia.que_me_hace_ruido`.
+
+- ETF positivos persistentes + contexto macro favorable → fortalecimiento genuino de una hipótesis alcista. ETF negativos persistentes + deterioro macro → fortalecimiento genuino de una hipótesis bajista. En ambos casos es la ALINEACIÓN entre fuentes la que fortalece, no el ETF Flow aislado.
+
+
+
+IMPORTANTE: el modelo no debe inferir objetivos de precio ni \
+
+direccionalidad futura únicamente a partir de ETF Flows — es \
+
+contexto institucional, no pronóstico.
+
+
+
+## Correlaciones — nunca un número suelto
+
+Cuando cites una correlación (`correlations.*`), acompañala SIEMPRE con \
+
+su `corr_252d_zscore_2y` o `corr_252d_percentile_2y` — decir "correlación \
+
+de -0.61 con DXY" sin contexto no dice si eso es normal o extremo para \
+
+ese par. El zscore/percentil es lo que la vuelve informativa.
+
+
+
+
+
+Te paso la hipótesis de la corrida anterior (si existe). Clasificá su estado:
+
+- vigente_sin_cambios: nada relevante se movió
+
+- vigente_fortalecida: lo que estaba en 'podria_acelerarla' ocurrió parcialmente
+
+- vigente_debilitada: lo que estaba en 'debilita' se profundizó, sin cruzar invalidación
+
+- invalidada: se cruzó explícitamente una condición de 'invalidaria' — citala
+
+- no_aplica_primera_corrida: si no te paso hipótesis anterior
+
+
+
+También decime si la 'variable_a_vigilar' de la corrida anterior aparece \
+
+mencionada en tu traduccion_macro de hoy (true/false). Si es la primera \
+
+corrida (no te pasé hipótesis anterior), poné false — el campo es \
+
+obligatorio y no acepta ausencia de valor.
+
+
+
+## Elasticidad del output (Sección 7 — NO es tu criterio libre)
+
+Te paso flags ya calculados (cambio_fase, cambio_modificador, \
+
+conflicto_detectado, conviccion_bajo, sorpresa_calendario). Si NINGUNO \
+
+está activo: traduccion_macro puede ser legítimamente corta (2-3 líneas, \
+
+"sin cambios, sigue vigente la misma lectura"), paranoia con \
+
+contexto_limpio=true si aplica. Si alguno está activo, expandí en \
+
+proporción a cuántos y cuáles se activaron.
+
+
+
+## Reglas generales
+
+- Español rioplatense, directo, sin relleno corporativo.
+
+- Todo dato que cites tiene que existir en el payload — no inventes \
+
+  cifras ni eventos.
+
+- Si el payload no tiene suficiente profundidad histórica para algo \
+
+  (sample_size bajo, zscore null), decilo como limitación, no lo \
+
+  disimules.
+
+"""
+
+
+
+
+
+def _get_client() -> genai.Client:
+
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+
+    if not api_key:
+
+        raise EnvironmentError("GEMINI_API_KEY debe estar seteada como variable de entorno.")
+
+    return genai.Client(api_key=api_key)
+
+
+
+
+
+def _build_user_prompt(payload: dict, previous_hypothesis: dict | None, elasticity_flags: dict | None) -> str:
+
+    parts = [
+
+        f"# Payload de {payload.get('display_name')} — as_of {payload.get('as_of')}",
+
+        "```json",
+
+        json.dumps(payload, indent=2, default=str, ensure_ascii=False),
+
+        "```",
+
+    ]
+
+
+
+    if previous_hypothesis:
+
+        parts += [
+
+            "\n# Hipótesis de la corrida anterior (para Sección 6 — Memoria)",
+
+            "```json",
+
+            json.dumps(previous_hypothesis, indent=2, default=str, ensure_ascii=False),
+
+            "```",
+
+        ]
+
+    else:
+
+        parts.append("\n# No hay hipótesis anterior — es la primera corrida para este activo.")
+
+
+
+    if elasticity_flags:
+
+        parts += [
+
+            "\n# Flags de elasticidad ya calculados (Sección 7 — no los recalcules, son la fuente de verdad sobre cuánto expandir)",
+
+            "```json",
+
+            json.dumps(elasticity_flags, indent=2, default=str, ensure_ascii=False),
+
+            "```",
+
+        ]
+
+    else:
+
+        parts.append("\n# No se pasaron flags de elasticidad — asumí que corresponde expandir (primera corrida o corrida manual).")
+
+
+
+    return "\n".join(parts)
+
+
+
+
+
+def run_engine(
+
+    payload: dict,
+
+    previous_hypothesis: dict | None = None,
+
+    elasticity_flags: dict | None = None,
+
+) -> AssetTranslatorOutput:
+
+    """
+
+    Punto de entrada único del Paso 2.
+
+
+
+    payload:             dict devuelto por data_contract.build_payload()
+
+    previous_hypothesis: dict con hipothesis + paranoia de la corrida anterior, o None
+
+    elasticity_flags:    dict devuelto por elasticity.py (Paso 3), o None
+
+    """
+
+    client = _get_client()
+
+    user_prompt = _build_user_prompt(payload, previous_hypothesis, elasticity_flags)
+
+
+
+    response = _generate_content_with_retry(
+
+        client,
+
+        model=MODEL_NAME,
+
+        contents=user_prompt,
+
+        config=types.GenerateContentConfig(
+
+            system_instruction=SYSTEM_PROMPT,
+
+            response_mime_type="application/json",
+
+            response_schema=AssetTranslatorOutput,
+
+            temperature=0.2,
+
+        ),
+
+    )
+
+
+
+    result: AssetTranslatorOutput = response.parsed
+
+    if result is None:
+
+        raise ValueError(f"Gemini no devolvió un objeto parseable. Respuesta cruda: {response.text[:2000]}")
+
+    return result
+
+
+
+
+
+if __name__ == "__main__":
+
+    from data_contract import build_payload
+
+    from persistence import get_previous_hypothesis
+
+
+
+    asset_key = "GOLD"
+
+    payload = build_payload(asset_key)
+
+    previous = get_previous_hypothesis(asset_key)
+
+    output = run_engine(payload, previous_hypothesis=previous)
+
+    print(output.model_dump_json(indent=2))
+</file>
+
+<file path="weekly_persistence.py">
+"""
+weekly_persistence.py — Orquestación oportunista + persistencia del Weekly Recap
+Intelligence Layer / Arkad Tools
+
+Funciones públicas:
+  get_week_range(asset_key, today)                    -> (week_start, week_end)
+  get_daily_runs(asset_key, week_start, week_end)      -> list[dict] (asset_history)
+  get_hypotheses_week(asset_key, week_start, week_end) -> list[dict] (hypotheses_history)
+  get_previous_weekly_recap(asset_key, week_start)     -> dict | None
+  save_weekly_recap(...)                               -> dict
+  generate_and_save_weekly(asset_key)                  -> dict (esto llama el cron)
+
+Principio oportunista: si asset_history no tiene NINGÚN registro para
+este activo en la ventana de la semana — ya sea porque el motor diario
+todavía no existe, o porque no corrió esta semana puntual —
+generate_and_save_weekly() NO genera un recap y devuelve
+status="skipped_no_data", sin lanzar excepción. Esto permite tener los
+22 asset_keys de config.py preparados desde ahora sin acoplar el
+Weekly Recap al orden en que se vayan implementando los motores diarios.
+
+No hay calendario de feriados ni de medios días (decisión de diseño):
+runs_used es simplemente COUNT(*) de lo que exista en la ventana. La
+diferencia entre una semana con feriado y una semana con un motor
+caído es indistinguible para esta capa — para eso está weekly_confidence
++ nota_completitud, no un calendario aparte.
+
+Estado actual: el __main__ corre generate_and_save_weekly() para TODOS
+los asset_keys en config.ASSET_CONFIGS, un activo a la vez, con pausa
+entre llamadas — mismo criterio que persistence.py del motor diario.
+Los activos sin datos esta semana devuelven skipped_no_data al toque,
+sin gastar cuota de Gemini.
+"""
+
+from datetime import date, datetime, timedelta, timezone
+
+from config import get_asset_config
+from supabase_clients import get_intel_layer_client
+from weekly_engine import run_weekly_engine
+
+
+def get_week_range(asset_key: str, today: date | None = None) -> tuple[date, date]:
+    """
+    Semana ISO (lunes a domingo) que contiene `today`. Misma ventana de
+    fechas para todos los activos — weekly_expected_runs (5 o 7) no
+    cambia la ventana, solo cuántas corridas se esperan encontrar adentro.
+    """
+    today = today or date.today()
+    week_start = today - timedelta(days=today.weekday())  # lunes
+    week_end = week_start + timedelta(days=6)              # domingo
+    return week_start, week_end
+
+
+def get_daily_runs(asset_key: str, week_start: date, week_end: date) -> list[dict]:
+    client = get_intel_layer_client()
+    resp = (
+        client.table("asset_history")
+        .select("as_of, generated_at, fase, modificadores, conviccion, full_output")
+        .eq("asset_key", asset_key)
+        .gte("as_of", week_start.isoformat())
+        .lte("as_of", week_end.isoformat())
+        .order("as_of", desc=False)
+        .execute()
+    )
+    return resp.data or []
+
+
+def get_hypotheses_week(asset_key: str, week_start: date, week_end: date) -> list[dict]:
+    client = get_intel_layer_client()
+    resp = (
+        client.table("hypotheses_history")
+        .select(
+            "as_of, sostiene, debilita, invalidaria, podria_acelerarla, "
+            "variable_a_vigilar, contexto_limpio, estado_hipotesis_previa"
+        )
+        .eq("asset_key", asset_key)
+        .gte("as_of", week_start.isoformat())
+        .lte("as_of", week_end.isoformat())
+        .order("as_of", desc=False)
+        .execute()
+    )
+    return resp.data or []
+
+
+def get_previous_weekly_recap(asset_key: str, week_start: date) -> dict | None:
+    """Trae el weekly_recap de la semana inmediatamente anterior, si existe."""
+    client = get_intel_layer_client()
+    previous_week_start = week_start - timedelta(days=7)
+    resp = (
+        client.table("weekly_recap")
+        .select("*")
+        .eq("asset_key", asset_key)
+        .eq("week_start", previous_week_start.isoformat())
+        .limit(1)
+        .execute()
+    )
+    return resp.data[0] if resp.data else None
+
+
+def save_weekly_recap(
+    asset_key: str,
+    display_name: str,
+    week_start: date,
+    week_end: date,
+    runs_expected: int,
+    runs_used: int,
+    output,
+) -> dict:
+    """
+    generated_at se setea explícito acá (no se deja al DEFAULT now() de la
+    columna): como esto es un UPSERT, el DEFAULT solo aplica en el INSERT
+    inicial de la semana — si el recap se regenera a mitad de semana
+    (patrón oportunista normal: 2 corridas hoy, 5 el viernes), el timestamp
+    quedaría congelado en la primera corrida sin este seteo explícito.
+    """
+    client = get_intel_layer_client()
+    output_dict = output.model_dump(mode="json")
+
+    row = {
+        "asset_key": asset_key,
+        "display_name": display_name,
+        "week_start": week_start.isoformat(),
+        "week_end": week_end.isoformat(),
+        "runs_expected": runs_expected,
+        "runs_used": runs_used,
+        "weekly_confidence": output.weekly_confidence,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "lo_mas_importante": output_dict["lo_mas_importante"],
+        "que_aprendio_sentinel": output.que_aprendio_sentinel,
+        "narrativas_cambiaron": output.narrativas_cambiaron,
+        "evolucion_hipotesis": output_dict["evolucion_hipotesis"],
+        "sorpresas_semana": output.sorpresas_semana,
+        "comparacion_semana_anterior": output.comparacion_semana_anterior,
+        "variables_a_vigilar": output_dict["variables_a_vigilar"],
+        "full_output": output_dict,
+    }
+    # upsert por (asset_key, week_start): si el cron corre 2 veces la
+    # misma semana, pisa en vez de duplicar.
+    client.table("weekly_recap").upsert(row, on_conflict="asset_key,week_start").execute()
+
+    return {
+        "asset_key": asset_key,
+        "week_start": week_start.isoformat(),
+        "week_end": week_end.isoformat(),
+        "status": "generated",
+        "runs_used": runs_used,
+        "runs_expected": runs_expected,
+        "weekly_confidence": output.weekly_confidence,
+    }
+
+
+def generate_and_save_weekly(asset_key: str, today: date | None = None, verbose: bool = True) -> dict:
+    """
+    Orquestador oportunista — esto es lo que llama el cron el día que
+    exista, una vez por activo (22 veces, mismo patrón que
+    generate_and_save() del motor diario). Por ahora, corrida manual.
+    """
+    def log(msg: str) -> None:
+        if verbose:
+            print(f"[weekly:{asset_key}] {msg}")
+
+    cfg = get_asset_config(asset_key)
+    week_start, week_end = get_week_range(asset_key, today)
+
+    log(f"Buscando corridas diarias entre {week_start} y {week_end}...")
+    daily_runs = get_daily_runs(asset_key, week_start, week_end)
+
+    if not daily_runs:
+        log("Sin registros en asset_history para esta ventana — skip oportunista.")
+        return {
+            "asset_key": asset_key,
+            "week_start": week_start.isoformat(),
+            "week_end": week_end.isoformat(),
+            "status": "skipped_no_data",
+        }
+
+    runs_expected = cfg["weekly_expected_runs"]
+    runs_used = len(daily_runs)
+
+    hypotheses_week = get_hypotheses_week(asset_key, week_start, week_end)
+    previous_weekly_recap = get_previous_weekly_recap(asset_key, week_start)
+
+    log(f"{runs_used}/{runs_expected} corridas encontradas. Generando recap...")
+    output = run_weekly_engine(
+        asset_display_name=cfg["display_name"],
+        week_start=week_start,
+        week_end=week_end,
+        daily_runs=daily_runs,
+        hypotheses_week=hypotheses_week,
+        previous_weekly_recap=previous_weekly_recap,
+        runs_expected=runs_expected,
+        runs_used=runs_used,
+    )
+
+    result = save_weekly_recap(
+        asset_key, cfg["display_name"], week_start, week_end,
+        runs_expected, runs_used, output,
+    )
+    log(f"Guardado OK: {result}")
+    return result
+
+
+if __name__ == "__main__":
+    import os
+    import time
+    import traceback
+
+    from config import ASSET_CONFIGS
+
+    # Mismo criterio que persistence.py: pausa entre activos para no
+    # ráfagear el free tier. El patrón oportunista hace que muchos
+    # activos terminen en skip casi instantáneo (sin llamar a Gemini),
+    # así que la corrida real tarda bastante menos que N x este delay.
+    DELAY_BETWEEN_ASSETS_SECONDS = 15
+
+    results: dict[str, dict] = {}
+    asset_keys = list(ASSET_CONFIGS.keys())
+
+    # ASSET_FILTER (incluir) / ASSET_EXCLUDE (excluir): listas separadas por
+    # comas de asset_keys. Existen para separar el recap semanal de BTC
+    # (7 días, corre el domingo) del resto (5 días, corre el sábado) sin
+    # duplicar generate_and_save_weekly() en otro archivo — ver
+    # weekly_engine.yml. Sin ninguna de las dos, corre todo (sin cambios).
+    _asset_filter = os.environ.get("ASSET_FILTER", "").strip()
+    if _asset_filter:
+        _requested = {a.strip().upper() for a in _asset_filter.split(",") if a.strip()}
+        asset_keys = [a for a in asset_keys if a in _requested]
+
+    _asset_exclude = os.environ.get("ASSET_EXCLUDE", "").strip()
+    if _asset_exclude:
+        _excluded = {a.strip().upper() for a in _asset_exclude.split(",") if a.strip()}
+        asset_keys = [a for a in asset_keys if a not in _excluded]
+
+    if not asset_keys:
+        raise SystemExit(
+            "ASSET_FILTER/ASSET_EXCLUDE no dejaron ningún asset_key para correr."
+        )
+
+    for i, asset_key in enumerate(asset_keys):
+        try:
+            results[asset_key] = generate_and_save_weekly(asset_key)
+        except Exception as exc:
+            print(f"[weekly:{asset_key}] FALLÓ: {exc}")
+            traceback.print_exc()
+            results[asset_key] = {"status": "error", "error": str(exc)}
+
+        is_last = i == len(asset_keys) - 1
+        if not is_last:
+            time.sleep(DELAY_BETWEEN_ASSETS_SECONDS)
+
+    print("\n=== Resumen Weekly Recap ===")
+    for asset_key, result in results.items():
+        status = result.get("status", "?")
+        if status == "generated":
+            print(f"  {asset_key}: OK — {result['runs_used']}/{result['runs_expected']} — confidence={result['weekly_confidence']}")
+        elif status == "skipped_no_data":
+            print(f"  {asset_key}: sin datos esta semana (skip)")
+        else:
+            print(f"  {asset_key}: ERROR — {result.get('error')}")
+</file>
+
+<file path="config.py">
+"""
+
+config.py — Asset Translator configuration
+
+Intelligence Layer / Arkad Tools
+
+
+
+Define el universo de activos soportados y, por activo, qué subconjunto
+
+de correlaciones y series FRED entran al payload. Curado a propósito:
+
+meter TODAS las correlaciones/series disponibles en el payload sería
+
+ruido, no señal (ver doc fuente, filosofía de "jerarquía de entrada").
+
+
+
+DISEÑO CONGELADO — 14 activos:
+
+  GOLD, SILVER, CRUDE_OIL, NASDAQ, SP500, DXY (ronda 1)
+
+  COPPER, RUSSELL2000, EURUSD, GBPUSD, USDJPY, USDCAD, USDCHF, AUDUSD (ronda 2)
+
+Cualquier métrica nueva debe pasar el filtro: "¿esto le permite al Motor
+
+explicar una narrativa macro importante que hoy no podría explicar?".
+
+Si la respuesta no es un sí claro, no se agrega.
+
+
+
+FUERA DE ASSET_CONFIGS a propósito (no son un "activo con motor propio"):
+
+  - DAX, HSI, NKY, VIX, VXN: sin datos de COT en Data Layer (índices no
+
+    reportados al CFTC, o índices de volatilidad sin futuro reportado).
+
+    Se usan únicamente como correlation_pairs dentro de otros activos —
+
+    con eso alcanza, el dato de pricing/correlación es sólido (~5.5 años
+
+    de historia, matriz de pricing_correlations completa). No se les
+
+    arma asset_key propio: además de faltar COT, no son activos que se
+
+    vayan a operar, así que no se justifica rediseñar el motor para un
+
+    caso "sin COT".
+
+  - BTC: PROMOVIDO a asset_key propio (2026-07) — se cumplió la condición
+
+    que este mismo docstring pedía: se sumó COT (tff_fut, symbol="BTC").
+
+    Tratado con narrativa propia, distinta de GOLD/FX — no "commodity
+
+    digital" ni "divisa", sino activo de liquidez global/risk-on-off
+
+    dentro y fuera del ecosistema cripto (decisión del usuario). Ver su
+
+    entrada en ASSET_CONFIGS para el detalle de anclas curadas.
+
+
+
+  - ETH: sigue en standby — mismo motivo original (sin COT propio en
+
+    Data Layer). Se usa como correlation_pair de BTC vía ETHBTC.
+
+  - NATGAS (NG): tiene pricing + COT completos (dataset disagg_fut), pero
+
+    se descartó a propósito. Su driver dominante es clima/inventarios
+
+    semanales (EIA) — nada de eso está en Data Layer, y ninguna fuente
+
+    disponible (FRED, correlaciones, calendario) lo compensa como sí pasa
+
+    con CRUDE_OIL. Un texto "macro-formado" sobre NG con este payload
+
+    explicaría poco de su varianza real. Revisar si en el futuro se suma
+
+    una fuente de clima/inventarios; hasta entonces, afuera.
+
+  - DGS10/DGS2/DGS5/US02Y/US10Y (rates/yields): anclas macro dentro de
+
+    otros activos (fred_series/correlation_pairs), nunca asset_key propio
+
+    — decisión explícita del usuario, no una limitación de datos.
+
+  - ES1!, NQ1!: mismo family_code que ES/NQ (is_primary=false en
+
+    symbol_registry) — son el mismo instrumento en otro formato, no un
+
+    activo nuevo.
+
+"""
+
+
+
+# Offsets de snapshot histórico, en días calendario, usados para la
+
+# comparación de 3 horizontes (Regla 1 / convicción, Sección 6 memoria).
+
+SNAPSHOT_OFFSETS_DAYS = {
+
+    "current": 0,
+
+    "w4": 28,
+
+    "w12": 84,
+
+}
+
+
+
+ASSET_CONFIGS = {
+
+    "GOLD": {
+
+        "display_name": "Oro (GC)",
+
+
+
+        # --- identificadores reales por tabla (confirmados con el usuario) ---
+
+        "pricing_symbol": "GC",             # pricing_metrics.symbol (¡distinto a cot_metrics!)
+
+        "cot_symbol": "GOLD",               # cot_metrics.symbol
+
+        "cot_dataset_type": "disagg_fut",  # cot_metrics.dataset_type
+
+        "correlation_symbol": "GC",        # pricing_correlations.symbol_a/b
+
+
+
+        # --- posicionamiento institucional (decisión del usuario) ---
+
+        # Managed Money = métrica principal. Asset Managers no aplica a
+
+        # disagg_fut (esa categoría es de TFF); dejamos "swap" como
+
+        # complementaria de disagg_fut ya que es la categoría más cercana
+
+        # a posicionamiento "institucional" fuera de m_money en ese dataset.
+
+        "cot_primary_field_prefix": "m_money",
+
+        "cot_secondary_field_prefix": "swap",
+
+
+
+        # --- correlaciones curadas (símbolo del otro lado del par) ---
+
+        "correlation_pairs": ["DXY", "DGS10", "DGS2", "VIX", "SI", "USDJPY"],
+
+
+
+        # --- series FRED curadas ---
+
+        # WALCL agregado: aísla la acción directa del balance de la Fed
+
+        # (QE/QT), narrativa de "debasement/liquidez" que M2SL (agregado
+
+        # amplio, rezagado) y NFCI (índice compuesto) no capturan de forma
+
+        # específica. Para Oro es el activo donde este pilar más pesa.
+
+        "fred_series": ["DGS10", "DGS2", "T10Y2Y", "DFF", "M2SL", "NFCI", "PCEPILFE", "WALCL"],
+
+
+
+        # LIMITACIÓN CONOCIDA: no existe DFII10 (ni ningún TIPS/real yield)
+
+        # en fred_metrics del Data Layer (confirmado). DGS10 nominal +
+
+        # PCEPILFE son un proxy imperfecto de tasas reales — no controlan
+
+        # por expectativas de inflación de mercado. El motor NO debe
+
+        # presentar esto como si tuviera visibilidad de tasas reales.
+
+
+
+        # --- calendario ---
+
+        "calendar_currencies": ["USD"],
+
+        "calendar_lookback_days": 21,   # eventos ya ocurridos (Sección 1, Regla 2)
+
+        "calendar_forward_days": 14,    # eventos upcoming (modificador "Esperando catalizadores")
+
+        "calendar_impact_filter": "High",
+
+        "weekly_expected_runs": 5,
+
+    },
+
+
+
+    "SILVER": {
+
+        "display_name": "Plata (SI)",
+
+
+
+        # --- identificadores reales por tabla ---
+
+        "pricing_symbol": "SI",
+
+        "cot_symbol": "SILVER",
+
+        "cot_dataset_type": "disagg_fut",  # mismo dataset que GOLD
+
+        "correlation_symbol": "SI",
+
+
+
+        # --- posicionamiento institucional ---
+
+        # Mismo criterio que GOLD: SI es disagg_fut, misma estructura de
+
+        # campos (m_money / swap / prod_merc), así que se reutiliza 1:1.
+
+        "cot_primary_field_prefix": "m_money",
+
+        "cot_secondary_field_prefix": "swap",
+
+
+
+        # --- correlaciones curadas ---
+
+        # USDJPY sacado: era herencia directa de GOLD sin justificación
+
+        # propia para Plata (carry/funding en yenes no es una narrativa
+
+        # específica de Plata; DXY ya cubre "dólar fuerte/débil" agregado).
+
+        # HG (cobre) se mantiene: componente de demanda industrial que el
+
+        # Oro no tiene (metal semi-monetario / semi-industrial).
+
+        "correlation_pairs": ["GC", "DXY", "DGS10", "DGS2", "VIX", "HG"],
+
+
+
+        # --- series FRED curadas ---
+
+        # INDPRO agregado: sin esto, el lado "monetario" de Plata estaba
+
+        # cubierto (tasas/liquidez/inflación) pero el lado "industrial"
+
+        # no tenía ningún dato macro de respaldo — solo HG en
+
+        # correlaciones, sin contexto de actividad real. Es la corrección
+
+        # más importante del set: permite explicar underperformance de
+
+        # Plata vs Oro por demanda industrial floja.
+
+        "fred_series": ["DGS10", "DGS2", "T10Y2Y", "DFF", "M2SL", "NFCI", "PCEPILFE", "INDPRO"],
+
+
+
+        # --- calendario (idéntico a GC) ---
+
+        "calendar_currencies": ["USD"],
+
+        "calendar_lookback_days": 21,
+
+        "calendar_forward_days": 14,
+
+        "calendar_impact_filter": "High",
+
+        "weekly_expected_runs": 5,
+
+    },
+
+
+
+    "CRUDE_OIL": {
+
+        "display_name": "Petróleo WTI (CL)",
+
+
+
+        # --- identificadores reales por tabla ---
+
+        "pricing_symbol": "CL",
+
+        "cot_symbol": "WTI",               # ojo: en cot_metrics el símbolo es "WTI", no "CL"
+
+        "cot_dataset_type": "disagg_fut",
+
+        "correlation_symbol": "CL",
+
+
+
+        # --- posicionamiento institucional ---
+
+        "cot_primary_field_prefix": "m_money",
+
+        "cot_secondary_field_prefix": "swap",
+
+
+
+        # --- correlaciones curadas ---
+
+        # DXY (relación inversa clásica), yields (costo de oportunidad /
+
+        # expectativas de crecimiento), ES (barómetro de risk-on/off),
+
+        # USDCAD (petro-moneda, altísima correlación con WTI).
+
+        # HG (cobre) evaluado y descartado: la narrativa de demanda
+
+        # global ya la cubren INDPRO + BAMLH0A0HYM2 + ES; no hay lectura
+
+        # de 3-4 párrafos sobre crudo que dependa de tener cobre además.
+
+        "correlation_pairs": ["DXY", "DGS10", "DGS2", "VIX", "ES", "USDCAD"],
+
+
+
+        # --- series FRED curadas ---
+
+        # CL es el activo más "macro-dependiente" del set: toca las 4
+
+        # categorías del registro (rates, inflación, liquidez, actividad)
+
+        # en vez de curar solo 1-2 como el resto. Aun así, PAYEMS e ICSA
+
+        # se sacaron en la revisión final: ambos son el mismo proxy
+
+        # (mercado laboral de EEUU) duplicado, y la conexión con crudo es
+
+        # indirecta (transmite vía tasas/dólar, ya cubiertos directo).
+
+        # UMCSENT reemplazado por BAMLH0A0HYM2: spread de crédito HY es
+
+        # de mercado (tiempo real) vs. encuesta mensual ruidosa — mejor
+
+        # señal para la narrativa "miedo a recesión / destrucción de
+
+        # demanda" que mueve crudo pese a recortes de OPEC+.
+
+        "fred_series": [
+
+            "DGS10", "DGS2", "T10Y2Y", "DFF",   # rates
+
+            "M2SL", "NFCI",                      # liquidez
+
+            "CPIAUCSL", "PCEPILFE",              # inflación (contexto de régimen, no driver)
+
+            "INDPRO", "BAMLH0A0HYM2",            # actividad / crédito-riesgo
+
+        ],
+
+
+
+        # LIMITACIÓN CONOCIDA: BAMLH0A0HYM2 solo tiene historia desde
+
+        # 2023-06-26 en fred_metrics (~3 años, no 5). Su campo pct_rank_5y
+
+        # no es un percentil real de 5 años para esta serie — es, como
+
+        # mucho, un percentil sobre la historia completa disponible
+
+        # (mismo tipo de imprecisión que *_percentile_5y en COT, que es
+
+        # expandido y no de ventana fija). El motor no debe presentar un
+
+        # percentil de BAMLH0A0HYM2 como si tuviera 5 años de profundidad
+
+        # real detrás.
+
+
+
+        # NOTA DE INTERPRETACIÓN: CPIAUCSL/PCEPILFE deben leerse como
+
+        # contexto de régimen ("cómo el propio crudo alimenta la
+
+        # inflación que ve la Fed"), NUNCA como si la inflación fuera un
+
+        # driver directo del precio del crudo — la causalidad real va al
+
+        # revés (crudo → inflación, vía CPI de energía).
+
+
+
+        # --- calendario ---
+
+        # "Crude Oil Inventories" (EIA) está catalogado como High impact
+
+        # en USD, así que el filtro estándar ya lo captura sin tocar nada.
+
+        "calendar_currencies": ["USD"],
+
+        "calendar_lookback_days": 21,
+
+        "calendar_forward_days": 14,
+
+        "calendar_impact_filter": "High",
+
+        "weekly_expected_runs": 5,
+
+    },
+
+
+
+    "NASDAQ": {
+
+        "display_name": "Nasdaq 100 (NQ)",
+
+
+
+        # --- identificadores reales por tabla ---
+
+        "pricing_symbol": "NQ",
+
+        "cot_symbol": "NQ",
+
+        "cot_dataset_type": "tff_fut",     # distinto dataset a GOLD/SILVER/CL
+
+        "correlation_symbol": "NQ",
+
+
+
+        # --- posicionamiento institucional ---
+
+        # tff_fut NO tiene m_money/swap poblados (confirmado en cot_metrics:
+
+        # count=0). Las categorías reales son dealer/asset_mgr/lev_money/
+
+        # other_rept. Leveraged Funds = dinero especulativo apalancado,
+
+        # la señal táctica más relevante para un índice; Asset Managers
+
+        # como secundaria (posicionamiento "real money"/institucional).
+
+        "cot_primary_field_prefix": "lev_money",
+
+        "cot_secondary_field_prefix": "asset_mgr",
+
+
+
+        # --- correlaciones curadas ---
+
+        # Foco en yields (sensibilidad a duración de growth stocks), DXY,
+
+        # VIX y VXN (volatilidad específica de Nasdaq), y ES como ancla
+
+        # de mercado amplio. PAYEMS evaluado como ancla de correlación/serie
+
+        # y descartado: la transmisión de nóminas a NQ pasa casi
+
+        # enteramente por tasas, que ya están cubiertas — agregarlo
+
+        # duplica la misma causa, no agrega una narrativa nueva.
+
+        "correlation_pairs": ["ES", "DXY", "DGS10", "DGS2", "VIX", "VXN"],
+
+
+
+        # --- series FRED curadas ---
+
+        # Sesgo fuerte a rates/liquidez (yields reales, condiciones
+
+        # financieras, balance de la Fed) por sobre inflación/actividad,
+
+        # que es donde NQ es más sensible. DFF sacado en la revisión
+
+        # final: redundante con SOFR (casi el mismo número salvo eventos
+
+        # puntuales de estrés de funding, que SOFR ya capta mejor).
+
+        # BAMLH0A0HYM2 agregado: comparte el pilar de crédito con
+
+        # SP500/CRUDE_OIL pero por una razón propia — apetito de riesgo
+
+        # crediticio anticipa el estrés en growth stocks antes que el
+
+        # equity mismo se mueva.
+
+        "fred_series": ["DGS10", "DGS2", "T10Y2Y", "SOFR", "M2SL", "NFCI", "WALCL", "BAMLH0A0HYM2"],
+
+
+
+        # LIMITACIÓN CONOCIDA: BAMLH0A0HYM2 solo tiene historia desde
+
+        # 2023-06-26 en fred_metrics (~3 años, no 5) — su pct_rank_5y no
+
+        # refleja una ventana real de 5 años (ver detalle en CRUDE_OIL).
+
+
+
+        # --- calendario ---
+
+        "calendar_currencies": ["USD"],
+
+        "calendar_lookback_days": 21,
+
+        "calendar_forward_days": 14,
+
+        "calendar_impact_filter": "High",
+
+        "weekly_expected_runs": 5,
+
+    },
+
+
+
+    "SP500": {
+
+        "display_name": "S&P 500 (ES)",
+
+
+
+        # --- identificadores reales por tabla ---
+
+        "pricing_symbol": "ES",
+
+        "cot_symbol": "ES",
+
+        "cot_dataset_type": "tff_fut",
+
+        "correlation_symbol": "ES",
+
+
+
+        # --- posicionamiento institucional ---
+
+        # Misma lógica que NQ (mismo dataset tff_fut).
+
+        "cot_primary_field_prefix": "lev_money",
+
+        "cot_secondary_field_prefix": "asset_mgr",
+
+
+
+        # --- correlaciones curadas ---
+
+        # Comparte casi toda la lógica de NQ (NQ, DXY, yields, VIX), pero
+
+        # cambia VXN por RUT: ES es mercado amplio, así que la breadth
+
+        # contra small caps (Russell 2000) es más relevante que la vol
+
+        # específica de tech. HG evaluado y descartado: no hay una
+
+        # narrativa establecida "cobre-S&P500" comparable a "cobre-crudo";
+
+        # sería agregar sin explicar nada nuevo.
+
+        "correlation_pairs": ["NQ", "DXY", "DGS10", "DGS2", "VIX", "RUT"],
+
+
+
+        # --- series FRED curadas ---
+
+        # A diferencia de NQ (rates/liquidez puro), ES está más expuesto
+
+        # a la economía real y amplia (empleo, consumo), no solo a
+
+        # duración/growth. ICSA sacado en la revisión final: redundante
+
+        # con PAYEMS (mismo proxy de mercado laboral duplicado) — PAYEMS
+
+        # es el dato más citado y central para "cómo está la economía".
+
+        # UMCSENT reemplazado por INDPRO: dato duro (producción industrial)
+
+        # en vez de encuesta de sentimiento, mismo pilar de "economía
+
+        # real" con mejor calidad de señal. BAMLH0A0HYM2 agregado: mismo
+
+        # pilar de crédito que NQ/CL, aquí como barómetro de estrés
+
+        # financiero amplio antes de que golpee al equity.
+
+        "fred_series": ["DGS10", "DGS2", "T10Y2Y", "DFF", "M2SL", "NFCI", "PAYEMS", "INDPRO", "BAMLH0A0HYM2"],
+
+
+
+        # LIMITACIÓN CONOCIDA: BAMLH0A0HYM2 solo tiene historia desde
+
+        # 2023-06-26 en fred_metrics (~3 años, no 5) — su pct_rank_5y no
+
+        # refleja una ventana real de 5 años (ver detalle en CRUDE_OIL).
+
+
+
+        # --- calendario ---
+
+        "calendar_currencies": ["USD"],
+
+        "calendar_lookback_days": 21,
+
+        "calendar_forward_days": 14,
+
+        "calendar_impact_filter": "High",
+
+        "weekly_expected_runs": 5,
+
+    },
+
+
+
+    "DXY": {
+
+        "display_name": "Índice Dólar (DXY)",
+
+
+
+        # --- identificadores reales por tabla ---
+
+        "pricing_symbol": "DXY",
+
+        "cot_symbol": "DXY",
+
+        "cot_dataset_type": "tff_fut",
+
+        "correlation_symbol": "DXY",
+
+
+
+        # --- posicionamiento institucional ---
+
+        "cot_primary_field_prefix": "lev_money",
+
+        "cot_secondary_field_prefix": "asset_mgr",
+
+
+
+        # --- correlaciones curadas ---
+
+        # DXY es el activo más interconectado del dashboard: se le permite
+
+        # una lista más ancha que al resto (8 vs. 6-7) a propósito. Los 5
+
+        # pares FX son literalmente los componentes de la canasta (EUR
+
+        # pesa ~57%, JPY ~14%, GBP ~12%, CAD ~9%, CHF ~4%; falta SEK, que
+
+        # no está en symbol_registry). GC y ES quedan como anclas de
+
+        # relación inversa (oro) y de risk-on/off (equity). Revisada en
+
+        # el freeze final: sigue siendo la lista más apropiada, sin
+
+        # agregados ni recortes.
+
+        "correlation_pairs": ["EURUSD", "USDJPY", "GBPUSD", "USDCAD", "USDCHF", "GC", "ES", "VIX"],
+
+
+
+        # --- series FRED curadas ---
+
+        # DFF sacado: redundante con SOFR (ambos ~tasa overnight en
+
+        # condiciones normales; SOFR además capta estrés de funding en
+
+        # dólares, que es la narrativa DXY-específica que DFF no aporta).
+
+        "fred_series": ["DGS10", "DGS2", "T10Y2Y", "SOFR", "M2SL", "NFCI", "WALCL", "PCEPILFE"],
+
+
+
+        # LIMITACIÓN CONOCIDA: el Data Layer no tiene series FRED-equivalentes
+
+        # de tasas/actividad de bancos centrales extranjeros (ECB, BOJ, BOE,
+
+        # BOC, SNB) — solo calendario de eventos discretos para esas monedas.
+
+        # El motor puede señalar "hoy hay reunión del BCE" pero NO puede
+
+        # comparar niveles/trayectorias de política monetaria relativa de
+
+        # forma continua. Diferenciales de crecimiento/tasas relativos
+
+        # quedan fuera de alcance del V1.
+
+
+
+        # --- calendario ---
+
+        # ÚNICA excepción real a "solo USD" en todo el set: el índice se
+
+        # mueve tanto por catalizadores propios (Fed) como por los de sus
+
+        # componentes (ECB, BOJ, BOE, BOC, SNB). Confirmado que
+
+        # economic_calendar_events tiene EUR/JPY/GBP/CAD/CHF poblados.
+
+        "calendar_currencies": ["USD", "EUR", "JPY", "GBP", "CAD", "CHF"],
+
+        "calendar_lookback_days": 21,
+
+        "calendar_forward_days": 14,
+
+        "calendar_impact_filter": "High",
+
+        "weekly_expected_runs": 5,
+
+    },
+
+
+
+    "COPPER": {
+
+        "display_name": "Cobre (HG)",
+
+
+
+        # --- identificadores reales por tabla ---
+
+        "pricing_symbol": "HG",
+
+        "cot_symbol": "COPPER",             # cot_metrics.symbol (ojo: no "HG")
+
+        "cot_dataset_type": "disagg_fut",   # mismo dataset que GOLD/SILVER/CL
+
+        "correlation_symbol": "HG",
+
+
+
+        # --- posicionamiento institucional ---
+
+        # Mismo criterio que GOLD/SILVER/CL: disagg_fut, m_money principal,
+
+        # swap como secundaria (intermediación).
+
+        "cot_primary_field_prefix": "m_money",
+
+        "cot_secondary_field_prefix": "swap",
+
+
+
+        # --- correlaciones curadas ---
+
+        # DXY (dólar), CL (narrativa conjunta de crecimiento global —
+
+        # "Dr. Copper + petróleo"), ES (riesgo/equity de EEUU), HSI (proxy
+
+        # de demanda china — el driver más específico de Cobre y el que
+
+        # ningún otro activo del set cubre), VIX (risk-on/off), SI
+
+        # (complejo de metales: industrial + semi-monetario).
+
+        "correlation_pairs": ["DXY", "CL", "ES", "HSI", "VIX", "SI"],
+
+
+
+        # --- series FRED curadas ---
+
+        # INDPRO como pulso directo de manufactura/demanda industrial,
+
+        # rates/liquidez como backdrop de ciclo global, BAMLH0A0HYM2
+
+        # como barómetro de miedo a recesión (mismo rol que en CRUDE_OIL).
+
+        "fred_series": ["DGS10", "DGS2", "T10Y2Y", "DFF", "M2SL", "NFCI", "INDPRO", "BAMLH0A0HYM2"],
+
+
+
+        # LIMITACIÓN CONOCIDA: BAMLH0A0HYM2 solo tiene historia desde
+
+        # 2023-06-26 en fred_metrics (~3 años, no 5) — su pct_rank_5y no
+
+        # refleja una ventana real de 5 años (ver detalle en CRUDE_OIL).
+
+
+
+        # --- calendario ---
+
+        # Único activo (junto con AUDUSD) con CNY habilitado: Cobre es el
+
+        # activo más ligado a demanda china de todo el set, y
+
+        # economic_calendar_events tiene CNY poblado (confirmado).
+
+        "calendar_currencies": ["USD", "CNY"],
+
+        "calendar_lookback_days": 21,
+
+        "calendar_forward_days": 14,
+
+        "calendar_impact_filter": "High",
+
+        "weekly_expected_runs": 5,
+
+    },
+
+
+
+    "RUSSELL2000": {
+
+        "display_name": "Russell 2000 (RUT)",
+
+
+
+        # --- identificadores reales por tabla ---
+
+        "pricing_symbol": "RUT",
+
+        "cot_symbol": "RTY",                # ojo: en cot_metrics el símbolo es "RTY", no "RUT"
+
+        "cot_dataset_type": "tff_fut",       # mismo dataset que NASDAQ/SP500/DXY
+
+        "correlation_symbol": "RUT",
+
+
+
+        # --- posicionamiento institucional ---
+
+        # Mismo criterio que NQ/ES/DXY (tff_fut): lev_money principal,
+
+        # asset_mgr secundaria.
+
+        "cot_primary_field_prefix": "lev_money",
+
+        "cot_secondary_field_prefix": "asset_mgr",
+
+
+
+        # --- correlaciones curadas ---
+
+        # ES como benchmark de breadth (RUT/ES es LA narrativa clásica de
+
+        # small caps vs. large caps), DXY, rates, VIX. Nada de VXN/NQ acá:
+
+        # RUT no tiene la sensibilidad de duración/growth de NQ, es más
+
+        # "economía doméstica apalancada" que "growth tech".
+
+        "correlation_pairs": ["ES", "DXY", "DGS10", "DGS2", "VIX"],
+
+
+
+        # --- series FRED curadas ---
+
+        # Mismo pilar que SP500 (economía real/doméstica), pero acá
+
+        # BAMLH0A0HYM2 pesa MÁS que en NQ/ES: las small caps dependen mucho
+
+        # más de crédito bancario/leveraged loans, así que el spread HY es
+
+        # un driver más directo para RUT que para large caps.
+
+        "fred_series": ["DGS10", "DGS2", "T10Y2Y", "DFF", "M2SL", "NFCI", "BAMLH0A0HYM2"],
+
+
+
+        # LIMITACIÓN CONOCIDA: BAMLH0A0HYM2 solo tiene historia desde
+
+        # 2023-06-26 en fred_metrics (~3 años, no 5) — ver detalle en
+
+        # CRUDE_OIL.
+
+
+
+        # --- calendario ---
+
+        "calendar_currencies": ["USD"],
+
+        "calendar_lookback_days": 21,
+
+        "calendar_forward_days": 14,
+
+        "calendar_impact_filter": "High",
+
+        "weekly_expected_runs": 5,
+
+    },
+
+
+
+    "EURUSD": {
+
+        "display_name": "Euro / Dólar (EURUSD)",
+
+
+
+        # --- identificadores reales por tabla ---
+
+        "pricing_symbol": "EURUSD",
+
+        "cot_symbol": "EUR",                 # cot_metrics usa el código de moneda sola, no el par
+
+        "cot_dataset_type": "tff_fut",
+
+        "correlation_symbol": "EURUSD",
+
+
+
+        # --- posicionamiento institucional ---
+
+        "cot_primary_field_prefix": "lev_money",
+
+        "cot_secondary_field_prefix": "asset_mgr",
+
+
+
+        # --- correlaciones curadas ---
+
+        # DXY (la cara opuesta de la misma moneda, ~57% del basket), rates
+
+        # de EEUU (proxy de diferencial, con la limitación de abajo),
+
+        # VIX (EUR como contraparte de flujos risk-off), GBPUSD (bloque
+
+        # europeo/libra correlacionado), DAX (salud del equity europeo,
+
+        # proxy de crecimiento de la Eurozona que ninguna otra fuente cubre).
+
+        "correlation_pairs": ["DXY", "DGS10", "DGS2", "VIX", "GBPUSD", "DAX"],
+
+
+
+        # --- series FRED curadas ---
+
+        # Solo lado EEUU disponible — ver limitación abajo.
+
+        "fred_series": ["DGS10", "DGS2", "T10Y2Y", "DFF", "M2SL", "NFCI"],
+
+
+
+        # LIMITACIÓN CONOCIDA: no hay tasas ni actividad del BCE en Data
+
+        # Layer — a diferencia de DXY (donde esto era una limitación
+
+        # secundaria), acá es el driver #1 de un cruce FX (diferencial de
+
+        # tasas EEUU-Eurozona) y no está disponible de forma continua.
+
+        # Solo hay calendario de eventos discretos (BCE vía currency=EUR).
+
+
+
+        # --- calendario ---
+
+        "calendar_currencies": ["USD", "EUR"],
+
+        "calendar_lookback_days": 21,
+
+        "calendar_forward_days": 14,
+
+        "calendar_impact_filter": "High",
+
+        "weekly_expected_runs": 5,
+
+    },
+
+
+
+    "GBPUSD": {
+
+        "display_name": "Libra / Dólar (GBPUSD)",
+
+
+
+        # --- identificadores reales por tabla ---
+
+        "pricing_symbol": "GBPUSD",
+
+        "cot_symbol": "GBP",
+
+        "cot_dataset_type": "tff_fut",
+
+        "correlation_symbol": "GBPUSD",
+
+
+
+        # --- posicionamiento institucional ---
+
+        "cot_primary_field_prefix": "lev_money",
+
+        "cot_secondary_field_prefix": "asset_mgr",
+
+
+
+        # --- correlaciones curadas ---
+
+        # DXY, rates EEUU, VIX, EURUSD (bloque europeo correlacionado).
+
+        # Sin proxy de equity UK propio (no hay FTSE en symbol_registry) —
+
+        # se sostiene con menos pares que EURUSD, no por descuido.
+
+        "correlation_pairs": ["DXY", "DGS10", "DGS2", "VIX", "EURUSD"],
+
+
+
+        # --- series FRED curadas ---
+
+        "fred_series": ["DGS10", "DGS2", "T10Y2Y", "DFF", "M2SL", "NFCI"],
+
+
+
+        # LIMITACIÓN CONOCIDA: no hay tasas ni actividad del BOE en Data
+
+        # Layer — mismo caso que EURUSD/BCE. Solo calendario discreto
+
+        # (currency=GBP).
+
+
+
+        # --- calendario ---
+
+        "calendar_currencies": ["USD", "GBP"],
+
+        "calendar_lookback_days": 21,
+
+        "calendar_forward_days": 14,
+
+        "calendar_impact_filter": "High",
+
+        "weekly_expected_runs": 5,
+
+    },
+
+
+
+    "USDJPY": {
+
+        "display_name": "Dólar / Yen (USDJPY)",
+
+
+
+        # --- identificadores reales por tabla ---
+
+        "pricing_symbol": "USDJPY",
+
+        "cot_symbol": "JPY",
+
+        "cot_dataset_type": "tff_fut",
+
+        "correlation_symbol": "USDJPY",
+
+
+
+        # --- posicionamiento institucional ---
+
+        "cot_primary_field_prefix": "lev_money",
+
+        "cot_secondary_field_prefix": "asset_mgr",
+
+
+
+        # --- correlaciones curadas ---
+
+        # DXY, rates EEUU (el diferencial USD-JPY es el driver clásico del
+
+        # carry trade), VIX (yen como moneda de funding — se fortalece en
+
+        # risk-off), NQ (el carry trade unwind golpea primero a growth
+
+        # tech — narrativa real y recurrente, no especulativa).
+
+        "correlation_pairs": ["DXY", "DGS10", "DGS2", "VIX", "NQ"],
+
+
+
+        # --- series FRED curadas ---
+
+        "fred_series": ["DGS10", "DGS2", "T10Y2Y", "DFF", "M2SL", "NFCI"],
+
+
+
+        # LIMITACIÓN CONOCIDA: no hay tasa del BOJ ni yield de JGB en Data
+
+        # Layer. Es la limitación más severa de las seis FX — la
+
+        # normalización de política del BOJ viene siendo EL driver
+
+        # dominante de USDJPY hace años, y el motor no tiene forma de
+
+        # verlo de manera continua, solo vía calendario discreto (JPY).
+
+
+
+        # --- calendario ---
+
+        "calendar_currencies": ["USD", "JPY"],
+
+        "calendar_lookback_days": 21,
+
+        "calendar_forward_days": 14,
+
+        "calendar_impact_filter": "High",
+
+        "weekly_expected_runs": 5,
+
+    },
+
+
+
+    "USDCAD": {
+
+        "display_name": "Dólar / Dólar Canadiense (USDCAD)",
+
+
+
+        # --- identificadores reales por tabla ---
+
+        "pricing_symbol": "USDCAD",
+
+        "cot_symbol": "CAD",
+
+        "cot_dataset_type": "tff_fut",
+
+        "correlation_symbol": "USDCAD",
+
+
+
+        # --- posicionamiento institucional ---
+
+        "cot_primary_field_prefix": "lev_money",
+
+        "cot_secondary_field_prefix": "asset_mgr",
+
+
+
+        # --- correlaciones curadas ---
+
+        # CL es el driver distintivo (petro-moneda, ya lo usa CRUDE_OIL
+
+        # en la dirección inversa), DXY, rates EEUU, VIX.
+
+        "correlation_pairs": ["DXY", "CL", "DGS10", "DGS2", "VIX"],
+
+
+
+        # --- series FRED curadas ---
+
+        "fred_series": ["DGS10", "DGS2", "T10Y2Y", "DFF", "M2SL", "NFCI"],
+
+
+
+        # LIMITACIÓN CONOCIDA: no hay tasas del BOC en Data Layer. Mismo
+
+        # patrón que el resto de las FX — solo calendario discreto
+
+        # (currency=CAD).
+
+
+
+        # --- calendario ---
+
+        "calendar_currencies": ["USD", "CAD"],
+
+        "calendar_lookback_days": 21,
+
+        "calendar_forward_days": 14,
+
+        "calendar_impact_filter": "High",
+
+        "weekly_expected_runs": 5,
+
+    },
+
+
+
+    "USDCHF": {
+
+        "display_name": "Dólar / Franco Suizo (USDCHF)",
+
+
+
+        # --- identificadores reales por tabla ---
+
+        "pricing_symbol": "USDCHF",
+
+        "cot_symbol": "CHF",
+
+        "cot_dataset_type": "tff_fut",
+
+        "correlation_symbol": "USDCHF",
+
+
+
+        # --- posicionamiento institucional ---
+
+        "cot_primary_field_prefix": "lev_money",
+
+        "cot_secondary_field_prefix": "asset_mgr",
+
+
+
+        # --- correlaciones curadas ---
+
+        # VIX pesa más acá que en el resto de las FX: CHF es el refugio
+
+        # clásico, se fortalece en risk-off puro. DXY, rates EEUU, EURUSD
+
+        # (bloque europeo, históricamente muy ligado pre-2015).
+
+        "correlation_pairs": ["DXY", "VIX", "DGS10", "DGS2", "EURUSD"],
+
+
+
+        # --- series FRED curadas ---
+
+        "fred_series": ["DGS10", "DGS2", "T10Y2Y", "DFF", "M2SL", "NFCI"],
+
+
+
+        # LIMITACIÓN CONOCIDA: no hay tasas del SNB en Data Layer. Mismo
+
+        # patrón que el resto de las FX — solo calendario discreto
+
+        # (currency=CHF).
+
+
+
+        # --- calendario ---
+
+        "calendar_currencies": ["USD", "CHF"],
+
+        "calendar_lookback_days": 21,
+
+        "calendar_forward_days": 14,
+
+        "calendar_impact_filter": "High",
+
+        "weekly_expected_runs": 5,
+
+    },
+
+
+
+    "AUDUSD": {
+
+        "display_name": "Dólar Australiano / Dólar (AUDUSD)",
+
+
+
+        # --- identificadores reales por tabla ---
+
+        "pricing_symbol": "AUDUSD",
+
+        "cot_symbol": "AUD",
+
+        "cot_dataset_type": "tff_fut",
+
+        "correlation_symbol": "AUDUSD",
+
+
+
+        # --- posicionamiento institucional ---
+
+        "cot_primary_field_prefix": "lev_money",
+
+        "cot_secondary_field_prefix": "asset_mgr",
+
+
+
+        # --- correlaciones curadas ---
+
+        # HG (cobre) en vez de un segundo proxy de China: Australia es
+
+        # exportador de commodities/minería, el link con cobre es real y
+
+        # evita duplicar la narrativa china con dos fuentes distintas.
+
+        # DXY, VIX (AUD es la FX de mayor beta a risk-on/off del set),
+
+        # rates EEUU.
+
+        "correlation_pairs": ["DXY", "HG", "VIX", "DGS10", "DGS2"],
+
+
+
+        # --- series FRED curadas ---
+
+        "fred_series": ["DGS10", "DGS2", "T10Y2Y", "DFF", "M2SL", "NFCI"],
+
+
+
+        # LIMITACIÓN CONOCIDA: no hay tasas del RBA en Data Layer. Mismo
+
+        # patrón que el resto de las FX — solo calendario discreto
+
+        # (currency=AUD).
+
+
+
+        # --- calendario ---
+
+        # CNY habilitado además de USD/AUD: China es el principal socio
+
+        # comercial de Australia (exportación de commodities), narrativa
+
+        # real y distinta a la de USD/AUD por separado.
+
+        "calendar_currencies": ["USD", "AUD", "CNY"],
+
+        "calendar_lookback_days": 21,
+
+        "calendar_forward_days": 14,
+
+        "calendar_impact_filter": "High",
+
+        "weekly_expected_runs": 5,
+
+    },
+
+
+
+    "BTC": {
+
+        "display_name": "Bitcoin (BTCUSD)",
+
+
+
+        # --- identificadores reales por tabla ---
+
+        "pricing_symbol": "BTCUSD",
+
+        "cot_symbol": "BTC",
+
+        "cot_dataset_type": "tff_fut",
+
+        "correlation_symbol": "BTCUSD",
+
+
+
+        # --- posicionamiento institucional ---
+
+        # tff_fut, mismo patrón que las 4 FX (JPY/CAD/CHF/AUD): lev_money
+
+        # (hedge funds/CTAs, posicionamiento especulativo apalancado) como
+
+        # primaria, asset_mgr como complementaria. Ver además ETF Flows
+
+        # (wireado más abajo, campo etf_tickers) como señal de adopción
+
+        # institucional real — COT mide especulación en futuros, no lo mismo.
+
+        "cot_primary_field_prefix": "lev_money",
+
+        "cot_secondary_field_prefix": "asset_mgr",
+
+
+
+        # --- DECISIÓN DE NARRATIVA (usuario, 2026-07) ---
+
+        # BTC NO se trata como commodity digital (GOLD) ni como divisa (FX).
+
+        # Se trata como activo de liquidez global / apetito por riesgo, con
+
+        # una capa adicional propia del ecosistema cripto. El 80% de su
+
+        # comportamiento se explica por 5 preguntas: liquidez global,
+
+        # risk-on/off, dominancia dentro de cripto, posicionamiento
+
+        # institucional (COT + ETF), condiciones financieras generales.
+
+        # Deliberadamente SIN anclas de GOLD/FX (GC, EURUSD) ni de equities
+
+        # puntuales (ES, NQ) — DXY+VIX ya capturan indirectamente el
+
+        # componente risk-on/off que NQ aportaría, sin sumar una 7ma ancla
+
+        # redundante. 8 anclas curadas > 15 mediocres (criterio explícito).
+
+
+
+        # --- correlaciones curadas ---
+
+        # Anclas macro (2): DXY (fortaleza dólar / liquidez global),
+
+        # VIX (risk-on/off, sustituye a NQ por redundancia).
+
+        # Anclas cripto (4): BTC.D/TOTAL2 (¿lidera BTC o rota a altcoins?),
+
+        # USDT.D (¿sale liquidez a stablecoin = risk-off intra-cripto?),
+
+        # ETHBTC (rotación de ciclo BTC-led vs alt-led).
+
+        "correlation_pairs": ["DXY", "VIX", "BTC.D", "TOTAL2", "USDT.D", "ETHBTC"],
+
+
+
+        # --- series FRED curadas ---
+
+        # WALCL: balance de la Fed (QE/QT) — para BTC pesa igual o más que
+
+        # para GOLD, es la narrativa de "liquidez global" que el usuario
+
+        # marcó como pilar #1. M2SL/NFCI: condiciones financieras/liquidez
+
+        # amplia. DGS10/DGS2: costo de oportunidad. Se deja afuera PCEPILFE
+
+        # (inflación) a propósito — la narrativa de BTC acá no es cobertura
+
+        # de inflación, es liquidez/risk-on (a diferencia de GOLD).
+
+        "fred_series": ["DGS10", "DGS2", "WALCL", "M2SL", "NFCI"],
+
+
+
+        # --- sentimiento ---
+
+        # Cripto-específico, NO el fear_and_greed general (equities) que
+
+        # usan GOLD/el resto — ver fix en data_contract.py._get_sentiment.
+
+        "sentiment_indicator": "crypto_fear_and_greed",
+
+
+
+        # --- ETF Flows (Farside) ---
+
+        # Pieza central para BTC (equivalente conceptual a COT para GOLD),
+
+        # no un dato más — así lo elevó el usuario. No encaja en
+
+        # correlation_pairs ni fred_series porque no es un símbolo de
+
+        # pricing_correlations ni una serie de fred_metrics — tiene su
+
+        # propia función en data_contract.py (_get_etf_flows), leyendo
+
+        # etf_flows_metrics (tabla poblada por ETF_Flows/etf_flows_metrics_builder.py).
+
+        # 'TOTAL' es el ticker agregado que publica Farside (suma de todos
+
+        # los ETFs spot de BTC) — en V1 es el único ticker que
+
+        # etf_flows_metrics_builder.py calcula (ver ese docstring), así que
+
+        # es el único que tiene sentido pedir acá por ahora. La lista deja
+
+        # espacio para sumar tickers individuales el día que se calculen.
+
+        "etf_tickers": ["TOTAL"],
+
+
+
+        # --- calendario ---
+
+        # Solo USD — el driver de calendario de BTC es la macro americana
+
+        # (FOMC/CPI/NFP), no hay calendario cripto-específico que aporte.
+
+        "calendar_currencies": ["USD"],
+
+        "calendar_lookback_days": 21,
+
+        "calendar_forward_days": 14,
+
+        "calendar_impact_filter": "High",
+
+        # 7, no 5 — BTC cotiza 24/7, el Weekly Recap consume sus hipótesis
+
+        # los 7 días, a diferencia del resto de los activos (mercados M-V).
+
+        "weekly_expected_runs": 7,
+
+    },
+
+}
+
+
+
+
+
+def get_asset_config(asset_key: str) -> dict:
+
+    if asset_key not in ASSET_CONFIGS:
+
+        raise KeyError(
+
+            f"Asset '{asset_key}' no está configurado en ASSET_CONFIGS. "
+
+            f"Disponibles: {list(ASSET_CONFIGS.keys())}"
+
+        )
+
+    return ASSET_CONFIGS[asset_key]
+</file>
+
+<file path="data_contract.py">
+"""
+data_contract.py — Paso 1 del roadmap: construcción del payload
+Intelligence Layer / Arkad Tools
+
+build_payload(asset_key) es el único punto de entrada. Devuelve un dict
+JSON-serializable con todo lo que el motor de caracterización de Estado
+(doc fuente, Sección 1) necesita: 3 snapshots (current/w4/w12) por fuente,
+calendario reciente + upcoming, correlaciones con zscore/percentil
+calculado on-the-fly (no persistido — ver decisión de arquitectura sobre
+pricing_correlations), y ETF Flows (3 snapshots por ticker, solo para
+activos con 'etf_tickers' en su config — hoy únicamente BTC; None para
+el resto).
+
+No hace ningún juicio de fase/modificador/convicción — eso es trabajo
+del motor LLM (Paso 2). Este módulo solo junta datos crudos de métricas.
+"""
+
+import statistics
+from datetime import date, timedelta, datetime, timezone
+
+from config import get_asset_config, SNAPSHOT_OFFSETS_DAYS
+from supabase_clients import get_data_layer_client
+
+
+# ---------------------------------------------------------------------------
+# Helpers genéricos
+# ---------------------------------------------------------------------------
+
+def _latest_row_on_or_before(client, table: str, date_col: str, filters: dict, on_or_before: date):
+    query = client.table(table).select("*")
+    for col, val in filters.items():
+        query = query.eq(col, val)
+    query = query.lte(date_col, on_or_before.isoformat())
+    query = query.order(date_col, desc=True).limit(1)
+    resp = query.execute()
+    return resp.data[0] if resp.data else None
+
+
+def _snapshots(client, table: str, date_col: str, filters: dict, today: date) -> dict:
+    """Devuelve {'current': row|None, 'w4': row|None, 'w12': row|None}."""
+    out = {}
+    for label, offset_days in SNAPSHOT_OFFSETS_DAYS.items():
+        target_date = today - timedelta(days=offset_days)
+        out[label] = _latest_row_on_or_before(client, table, date_col, filters, target_date)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Fuentes individuales
+# ---------------------------------------------------------------------------
+
+def _get_pricing(client, cfg: dict, today: date) -> dict:
+    filters = {"symbol": cfg["pricing_symbol"]}
+    return _snapshots(client, "pricing_metrics", "date", filters, today)
+
+
+def _get_cot(client, cfg: dict, today: date) -> dict:
+    filters = {"symbol": cfg["cot_symbol"], "dataset_type": cfg["cot_dataset_type"]}
+    return _snapshots(client, "cot_metrics", "report_date", filters, today)
+
+
+def _get_fred(client, cfg: dict, today: date) -> dict:
+    out = {}
+    for series_id in cfg["fred_series"]:
+        filters = {"series_id": series_id}
+        out[series_id] = _snapshots(client, "fred_metrics", "observation_date", filters, today)
+    return out
+
+
+def _get_etf_flows(client, cfg: dict, asset_key: str, today: date) -> dict | None:
+    """
+    Snapshots current/w4/w12 de etf_flows_metrics, por ticker, solo para
+    activos que declaran 'etf_tickers' en su ASSET_CONFIGS (hoy: solo BTC,
+    ticker agregado 'TOTAL' — ver ETF_Flows/etf_flows_metrics_calculator.py,
+    que en V1 solo calcula (asset, ticker) = (BTC, TOTAL)).
+
+    Devuelve None para el resto de los 14 activos (no tienen 'etf_tickers'
+    en su config) — el payload de esos activos queda sin cambios.
+
+    El filtro 'asset' usa asset_key directamente (coincide 1:1 con la
+    columna 'asset' de etf_flows_metrics, ej. "BTC" == "BTC") — no hace
+    falta un identificador aparte en cfg como pricing_symbol/cot_symbol,
+    porque a diferencia de esas tablas acá no hay divergencia de nombre.
+    """
+    tickers = cfg.get("etf_tickers")
+    if not tickers:
+        return None
+
+    out = {}
+    for ticker in tickers:
+        filters = {"asset": asset_key, "ticker": ticker}
+        out[ticker] = _snapshots(client, "etf_flows_metrics", "date", filters, today)
+    return out
+
+
+def _get_sentiment(client, cfg: dict, today: date) -> dict:
+    """
+    sentiment_metrics no tiene columna symbol — es un indicador (general o
+    específico de cripto), filtrado por 'indicator'. Default 'fear_and_greed'
+    (CNN, mercado general) para no romper assets existentes; BTC pasa
+    'crypto_fear_and_greed' vía cfg.
+    """
+    filters = {"indicator": cfg.get("sentiment_indicator", "fear_and_greed")}
+    return _snapshots(client, "sentiment_metrics", "date", filters, today)
+
+
+def _get_calendar_recent(client, cfg: dict, today: date) -> list:
+    since = today - timedelta(days=cfg["calendar_lookback_days"])
+    resp = (
+        client.table("calendar_metrics")
+        .select("*")
+        .in_("currency", cfg["calendar_currencies"])
+        .eq("impact", cfg["calendar_impact_filter"])
+        .gte("event_date", since.isoformat())
+        .lte("event_date", today.isoformat())
+        .order("event_date", desc=True)
+        .execute()
+    )
+    return resp.data or []
+
+
+def _get_calendar_upcoming(client, cfg: dict, today: date) -> list:
+    until = today + timedelta(days=cfg["calendar_forward_days"])
+    # select explícito: excluye raw_payload (HTML/tags de la fuente, ruido
+    # puro para el motor) y otros campos operativos que no aportan señal.
+    fields = (
+        "event_name, currency, country_name, event_group, impact, "
+        "release_datetime, event_date, event_status, "
+        "actual, forecast, previous, surprise"
+    )
+    resp = (
+        client.table("economic_calendar_events")
+        .select(fields)
+        .in_("currency", cfg["calendar_currencies"])
+        .eq("impact", cfg["calendar_impact_filter"])
+        .eq("event_status", "upcoming")
+        .gte("event_date", today.isoformat())
+        .lte("event_date", until.isoformat())
+        .order("event_date", desc=False)
+        .execute()
+    )
+    return resp.data or []
+
+
+def _fetch_correlation_pair_row(client, symbol_a: str, symbol_b: str, on_or_before: date):
+    resp = (
+        client.table("pricing_correlations")
+        .select("*")
+        .or_(
+            f"and(symbol_a.eq.{symbol_a},symbol_b.eq.{symbol_b}),"
+            f"and(symbol_a.eq.{symbol_b},symbol_b.eq.{symbol_a})"
+        )
+        .lte("date", on_or_before.isoformat())
+        .order("date", desc=True)
+        .limit(1)
+        .execute()
+    )
+    return resp.data[0] if resp.data else None
+
+
+def _fetch_correlation_history(client, symbol_a: str, symbol_b: str, since: date, until: date) -> list:
+    resp = (
+        client.table("pricing_correlations")
+        .select("date, corr_252d")
+        .or_(
+            f"and(symbol_a.eq.{symbol_a},symbol_b.eq.{symbol_b}),"
+            f"and(symbol_a.eq.{symbol_b},symbol_b.eq.{symbol_a})"
+        )
+        .gte("date", since.isoformat())
+        .lte("date", until.isoformat())
+        .order("date", desc=False)
+        .execute()
+    )
+    return resp.data or []
+
+
+def _zscore_and_percentile(current_value: float, history_values: list) -> dict:
+    """Calcula zscore/percentil del valor actual contra su propia historia.
+    On-the-fly, sin persistir (decisión de arquitectura — ver conversación).
+    """
+    clean = [v for v in history_values if v is not None]
+    if len(clean) < 30 or current_value is None:
+        return {"zscore": None, "percentile": None, "sample_size": len(clean)}
+
+    mean = statistics.mean(clean)
+    stdev = statistics.stdev(clean) if len(clean) > 1 else 0.0
+    zscore = (current_value - mean) / stdev if stdev > 0 else 0.0
+
+    rank = sum(1 for v in clean if v <= current_value)
+    percentile = round(100 * rank / len(clean), 1)
+
+    return {"zscore": round(zscore, 2), "percentile": percentile, "sample_size": len(clean)}
+
+
+def _get_correlations(client, cfg: dict, today: date) -> dict:
+    corr_symbol = cfg["correlation_symbol"]
+    history_since = today - timedelta(days=730)  # ~2 años para zscore on-the-fly
+
+    out = {}
+    for other_symbol in cfg["correlation_pairs"]:
+        current_row = _fetch_correlation_pair_row(client, corr_symbol, other_symbol, today)
+        current_corr = float(current_row["corr_252d"]) if current_row and current_row.get("corr_252d") is not None else None
+
+        history_rows = _fetch_correlation_history(client, corr_symbol, other_symbol, history_since, today)
+        history_values = [float(r["corr_252d"]) for r in history_rows if r.get("corr_252d") is not None]
+
+        stats = _zscore_and_percentile(current_corr, history_values)
+
+        out[other_symbol] = {
+            "corr_20d": float(current_row["corr_20d"]) if current_row and current_row.get("corr_20d") is not None else None,
+            "corr_60d": float(current_row["corr_60d"]) if current_row and current_row.get("corr_60d") is not None else None,
+            "corr_252d": current_corr,
+            "corr_252d_zscore_2y": stats["zscore"],
+            "corr_252d_percentile_2y": stats["percentile"],
+            "as_of": current_row["date"] if current_row else None,
+        }
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+def build_payload(asset_key: str, as_of: date | None = None) -> dict:
+    """
+    Construye el payload JSON completo para el Asset Translator.
+
+    asset_key: clave en ASSET_CONFIGS (ej. "GOLD")
+    as_of:     fecha de referencia (default: hoy). Útil para backtesting.
+    """
+    cfg = get_asset_config(asset_key)
+    today = as_of or date.today()
+    client = get_data_layer_client()
+
+    payload = {
+        "asset_key": asset_key,
+        "display_name": cfg["display_name"],
+        "as_of": today.isoformat(),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "pricing": _get_pricing(client, cfg, today),
+        "cot": {
+            "primary_field_prefix": cfg["cot_primary_field_prefix"],
+            "secondary_field_prefix": cfg["cot_secondary_field_prefix"],
+            "snapshots": _get_cot(client, cfg, today),
+        },
+        "fred": _get_fred(client, cfg, today),
+        "sentiment": _get_sentiment(client, cfg, today),
+        "etf_flows": _get_etf_flows(client, cfg, asset_key, today),
+        "correlations": _get_correlations(client, cfg, today),
+        "calendar_recent": _get_calendar_recent(client, cfg, today),
+        "calendar_upcoming": _get_calendar_upcoming(client, cfg, today),
+    }
+    return payload
+
+
+if __name__ == "__main__":
+    import json
+    result = build_payload("GOLD")
+    print(json.dumps(result, indent=2, default=str))
+</file>
+
+<file path="persistence.py">
+"""
+persistence.py — Paso 4 del roadmap: escritura/lectura en Intelligence Layer
+Intelligence Layer / Arkad Tools
+
+Funciones públicas:
+  get_previous_hypothesis(asset_key)   -> hipotesis+paranoia de la última
+                                           corrida, para pasarle a
+                                           engine.run_engine() (Sección 6)
+  get_previous_state(asset_key)        -> fase+modificadores+conviccion de
+                                           la última corrida, para comparar
+                                           contra la corrida de hoy
+  generate_and_save(asset_key)         -> orquesta el patrón de 2 llamadas
+                                           y persiste el resultado (esto es
+                                           lo que llama el cron, un asset_key
+                                           a la vez)
+  save_run(asset_key, payload, output, elasticity_flags=None)
+                                        -> escribe en las 3 tablas
+
+Patrón de 2 llamadas (decisión: costo despreciable a 25 activos/día — ver
+conversación): la corrida preliminar (sin elasticity_flags) le da al motor
+libertad para decidir fase/modificador/conviccion de hoy sin ningún sesgo
+externo. Con ESE resultado ya podemos calcular los 5 flags reales
+comparando contra la última corrida guardada (elasticity.py, Paso 3) — y
+recién ahí hacer la corrida final, la que de verdad se persiste, con los
+flags ya resueltos guiando cuánto expandirse (Sección 7 del doc). La
+corrida preliminar se descarta, no se guarda en ninguna tabla.
+
+No mezcla memoria con datos — todo esto vive en el Supabase de
+Intelligence Layer, nunca en el de Data Layer.
+
+Nota (upsert por asset_key+as_of en asset_history y hypotheses_history):
+si el motor corre 2 veces el mismo día para el mismo activo (reintento
+manual, corrida disparada a mano después de una noticia fuerte, etc.),
+la segunda corrida PISA la fila de ese día en vez de insertar una
+variante extra — un solo registro por (asset_key, as_of) en las 3
+tablas. Esto requiere que asset_history y hypotheses_history tengan una
+constraint UNIQUE (asset_key, as_of) en Supabase — ver
+dedup_and_add_constraint.sql.
+"""
+
+from datetime import date, datetime, timezone
+
+from output_schema import AssetTranslatorOutput
+from supabase_clients import get_intel_layer_client
+
+
+def get_previous_hypothesis(asset_key: str) -> dict | None:
+    """
+    Lee la última corrida guardada para este activo desde asset_outputs
+    (upsert de "último análisis"). Devuelve el dict que engine.run_engine()
+    espera como `previous_hypothesis`, o None si es la primera corrida.
+    """
+    client = get_intel_layer_client()
+    resp = (
+        client.table("asset_outputs")
+        .select("hipotesis, paranoia, as_of")
+        .eq("asset_key", asset_key)
+        .limit(1)
+        .execute()
+    )
+    if not resp.data:
+        return None
+
+    row = resp.data[0]
+    return {
+        "as_of": row["as_of"],
+        "hipotesis": row["hipotesis"],
+        "paranoia": row["paranoia"],
+    }
+
+
+def get_previous_state(asset_key: str) -> dict | None:
+    """
+    Lee fase/modificadores/conviccion de la última corrida guardada
+    (asset_outputs). Es el insumo de elasticity.compute_elasticity_flags()
+    para comparar la corrida de hoy contra la última — separado de
+    get_previous_hypothesis() porque esa otra función solo trae
+    hipotesis/paranoia (lo que necesita engine.py), no el estado
+    compuesto (lo que necesita elasticity.py).
+
+    Devuelve {"fase": str, "modificadores": list[str], "conviccion": str,
+    "as_of": str} o None si es la primera corrida para este activo.
+    """
+    client = get_intel_layer_client()
+    resp = (
+        client.table("asset_outputs")
+        .select("fase, modificadores, conviccion, as_of")
+        .eq("asset_key", asset_key)
+        .limit(1)
+        .execute()
+    )
+    if not resp.data:
+        return None
+
+    row = resp.data[0]
+    return {
+        "fase": row["fase"],
+        "modificadores": row["modificadores"],
+        "conviccion": row["conviccion"],
+        "as_of": row["as_of"],
+    }
+
+
+def save_run(
+    asset_key: str,
+    payload: dict,
+    output: AssetTranslatorOutput,
+    elasticity_flags: dict | None = None,
+) -> dict:
+    """
+    Persiste una corrida completa en las 3 tablas de Intelligence Layer:
+      - asset_outputs:      UPSERT (pisa el último análisis)
+      - asset_history:      UPSERT por (asset_key, as_of) — un registro
+                             por día, se pisa si el motor corre 2 veces
+      - hypotheses_history: UPSERT por (asset_key, as_of) — ídem
+
+    payload: el dict devuelto por data_contract.build_payload() — se usa
+             solo para sacar display_name, no se persiste completo acá
+             (el payload crudo no es responsabilidad de Intelligence Layer).
+
+    elasticity_flags: dict de elasticity.compute_elasticity_flags() (Paso 3),
+             calculado DESPUÉS de tener `output` (ver nota de arquitectura
+             en elasticity.py — no son pre-calculables para esta misma
+             corrida). Si se pasa, se guarda dentro de full_output en
+             asset_history bajo la clave "elasticity_flags" — no hace
+             falta migración de schema para esto. Si más adelante querés
+             una columna dedicada (para queries más simples desde el
+             cron), avisame y armo la migración.
+
+    Devuelve un resumen de qué se escribió, para logging del caller.
+    """
+    client = get_intel_layer_client()
+    today = date.today()
+    now = datetime.now(timezone.utc).isoformat()
+
+    output_dict = output.model_dump(mode="json")
+
+    # --- asset_outputs (upsert) ---
+    outputs_row = {
+        "asset_key": asset_key,
+        "display_name": payload.get("display_name", asset_key),
+        "as_of": today.isoformat(),
+        "generated_at": now,
+        "fase": output.estado.fase,
+        "modificadores": output.estado.modificadores,
+        "conviccion": output.estado.conviccion,
+        "evidence_keys": output.estado.evidence_keys,
+        "frase_puente": output.frase_puente,
+        "traduccion_macro": output.traduccion_macro,
+        "en_criollo": output.en_criollo,
+        "hipotesis": output_dict["hipotesis"],
+        "paranoia": output_dict["paranoia"],
+        "memoria": output_dict["memoria"],
+        "updated_at": now,
+    }
+    client.table("asset_outputs").upsert(outputs_row, on_conflict="asset_key").execute()
+
+    # --- asset_history (upsert por asset_key+as_of — evita duplicados si
+    #     el motor corre 2 veces el mismo día) ---
+    history_full_output = output_dict
+    if elasticity_flags is not None:
+        history_full_output = {**output_dict, "elasticity_flags": elasticity_flags}
+
+    history_row = {
+        "asset_key": asset_key,
+        "as_of": today.isoformat(),
+        "generated_at": now,
+        "fase": output.estado.fase,
+        "modificadores": output.estado.modificadores,
+        "conviccion": output.estado.conviccion,
+        "full_output": history_full_output,
+    }
+    client.table("asset_history").upsert(history_row, on_conflict="asset_key,as_of").execute()
+
+    # --- hypotheses_history (upsert por asset_key+as_of — evita duplicados
+    #     si el motor corre 2 veces el mismo día) ---
+    hyp_row = {
+        "asset_key": asset_key,
+        "as_of": today.isoformat(),
+        "sostiene": output.hipotesis.sostiene,
+        "debilita": output.hipotesis.debilita,
+        "invalidaria": output.hipotesis.invalidaria,
+        "podria_acelerarla": output.hipotesis.podria_acelerarla,
+        "variable_a_vigilar": output.paranoia.variable_a_vigilar,
+        "contexto_limpio": output.paranoia.contexto_limpio,
+        "estado_hipotesis_previa": output.memoria.estado_hipotesis_previa,
+    }
+    client.table("hypotheses_history").upsert(hyp_row, on_conflict="asset_key,as_of").execute()
+
+    return {
+        "asset_key": asset_key,
+        "as_of": today.isoformat(),
+        "tables_written": ["asset_outputs", "asset_history", "hypotheses_history"],
+        "elasticity_flags": elasticity_flags,
+    }
+
+
+def generate_and_save(asset_key: str, verbose: bool = True) -> dict:
+    """
+    Orquesta una corrida completa para un activo: patrón de 2 llamadas
+    al motor + cálculo de flags + persistencia. Esto es lo que el cron
+    llama una vez por activo (25 veces, una por asset_key).
+
+    1. Arma el payload y busca estado/hipótesis previos.
+    2. Corrida PRELIMINAR (sin elasticity_flags) — el motor decide fase/
+       modificador/conviccion de hoy con libertad total.
+    3. Calcula los 5 flags reales (elasticity.py) comparando esa
+       preliminar contra la última guardada en asset_outputs.
+    4. Corrida FINAL (con elasticity_flags ya resueltos) — esta es la
+       que se persiste. La preliminar se descarta.
+    5. save_run() en las 3 tablas.
+
+    Devuelve el resumen de save_run().
+    """
+    # Imports acá adentro (no a nivel de módulo) para evitar import
+    # circular: engine.py y data_contract.py ya importan cosas de este
+    # mismo paquete en sus propios __main__.
+    from data_contract import build_payload
+    from engine import run_engine
+    from elasticity import compute_elasticity_flags
+
+    def log(msg: str) -> None:
+        if verbose:
+            print(f"[{asset_key}] {msg}")
+
+    log("Buscando estado e hipótesis previos...")
+    previous_state = get_previous_state(asset_key)
+    previous_hypothesis = get_previous_hypothesis(asset_key)
+
+    log("Armando payload desde Data Layer...")
+    payload = build_payload(asset_key)
+
+    log("Corrida preliminar (sin flags)...")
+    preliminary_output = run_engine(payload, previous_hypothesis=previous_hypothesis)
+
+    log("Calculando flags de elasticidad (Paso 3, sin LLM)...")
+    preliminary_estado = preliminary_output.estado.model_dump(mode="json")
+    elasticity_flags = compute_elasticity_flags(preliminary_estado, previous_state, payload)
+    log(f"Flags: {elasticity_flags}")
+
+    log("Corrida final (con flags)...")
+    # Fix: en la primera corrida (previous_state is None) NO se pasan los
+    # flags calculados como si fueran una lectura real de "nada cambió" —
+    # son 5 False por definición (no hay nada contra qué comparar), y
+    # pasarlos como dict (truthy) le indicaría al motor que sea breve
+    # justo en el análisis que debería ser el más completo. Se siguen
+    # persistiendo en asset_history vía save_run() más abajo, solo se
+    # excluyen de la instrucción al modelo.
+    final_output = run_engine(
+        payload,
+        previous_hypothesis=previous_hypothesis,
+        elasticity_flags=elasticity_flags if previous_state is not None else None,
+    )
+
+    log("Guardando en Intelligence Layer...")
+    result = save_run(asset_key, payload, final_output, elasticity_flags=elasticity_flags)
+    log(f"Guardado OK: {result}")
+    return result
+
+
+if __name__ == "__main__":
+    import os
+    import time
+    import traceback
+
+    ASSETS = [
+        "GOLD",
+        "SILVER",
+        "CRUDE_OIL",
+        "NASDAQ",
+        "SP500",
+        "DXY",
+        "COPPER",
+        "RUSSELL2000",
+        "EURUSD",
+        "GBPUSD",
+        "USDJPY",
+        "USDCAD",
+        "USDCHF",
+        "AUDUSD",
+        "BTC",
+    ]
+
+    # ASSET_FILTER: lista separada por comas de asset_keys a correr en esta
+    # invocación (ej. "BTC"). Permite reusar este mismo script para el cron
+    # de fin de semana de BTC (único activo 24/7 — ver daily_engine.yml)
+    # sin duplicar generate_and_save() en un archivo aparte. Si no está
+    # seteada, corre los 15 de siempre (comportamiento sin cambios).
+    _asset_filter = os.environ.get("ASSET_FILTER", "").strip()
+    if _asset_filter:
+        _requested = {a.strip().upper() for a in _asset_filter.split(",") if a.strip()}
+        ASSETS = [a for a in ASSETS if a in _requested]
+        if not ASSETS:
+            raise SystemExit(
+                f"ASSET_FILTER={_asset_filter!r} no matchea ningún asset_key de la lista."
+            )
+
+    # Pausa entre activos (no entre reintentos dentro de una misma llamada
+    # — eso ya lo maneja engine.py). Con 15 activos, sin esto se manda una
+    # ráfaga de 2 llamadas x N activos casi en simultáneo, lo que aumenta
+    # la chance de pisar el límite de RPM del free tier y generar más 503
+    # de los que el retry por-llamada puede compensar. 15s es conservador
+    # para no alargar demasiado la corrida (+3.5min extra en total);
+    # ajustar si se sigue viendo 503 frecuente.
+    DELAY_BETWEEN_ASSETS_SECONDS = 15
+
+    # --- Segunda capa de reintento: a nivel de ACTIVO, no de llamada ---
+    # engine.py ya reintenta cada llamada individual hasta 5 veces con
+    # backoff exponencial (8/16/32/64s ≈ 2min). Eso cubre baches cortos
+    # de Gemini, pero un evento de "high demand" prolongado (Google mismo
+    # reporta que pueden durar de minutos a varias horas) agota esos 2min
+    # sin resolverse. En vez de resignarse a "hoy este activo se queda sin
+    # hipótesis", se guarda qué activos fallaron y se los reintenta en
+    # pasadas separadas, con una espera más larga entre pasadas — le da al
+    # problema de Gemini más tiempo real para disolverse solo, sin
+    # bloquear la corrida entera esperando horas.
+    RETRY_ROUND_DELAY_SECONDS = 300  # 5 min entre pasadas de reintento
+    MAX_RETRY_ROUNDS = 2             # + la pasada inicial = hasta 3 intentos por activo
+
+    def _run_round(assets_to_run: list[str]) -> dict:
+        """Corre generate_and_save() para una lista de activos, con su
+        propio try/except por activo (una falla no frena a los demás)."""
+        round_results: dict[str, dict] = {}
+        for i, asset in enumerate(assets_to_run):
+            try:
+                round_results[asset] = generate_and_save(asset)
+            except Exception as exc:
+                print(f"[{asset}] FALLÓ: {exc}")
+                traceback.print_exc()
+                round_results[asset] = {"error": str(exc)}
+
+            is_last_asset = i == len(assets_to_run) - 1
+            if not is_last_asset:
+                time.sleep(DELAY_BETWEEN_ASSETS_SECONDS)
+        return round_results
+
+    # Pasada inicial: los 15 activos.
+    results: dict[str, dict] = _run_round(ASSETS)
+
+    # Pasadas de reintento: solo los que quedaron con error, hasta agotar
+    # MAX_RETRY_ROUNDS. Si ya no queda ninguno con error, no se espera de más.
+    for retry_round in range(1, MAX_RETRY_ROUNDS + 1):
+        failed_assets = [asset for asset, result in results.items() if "error" in result]
+        if not failed_assets:
+            break
+
+        print(
+            f"\n=== Pasada de reintento {retry_round}/{MAX_RETRY_ROUNDS} — "
+            f"{len(failed_assets)} activo(s) pendientes: {failed_assets} ==="
+        )
+        print(f"Esperando {RETRY_ROUND_DELAY_SECONDS}s antes de reintentar...")
+        time.sleep(RETRY_ROUND_DELAY_SECONDS)
+
+        retry_results = _run_round(failed_assets)
+        results.update(retry_results)
+
+    print("\n=== Resumen de la corrida ===")
+    for asset, result in results.items():
+        if "error" in result:
+            print(f"  {asset}: ERROR (persistió tras {MAX_RETRY_ROUNDS + 1} pasadas) — {result['error']}")
+        else:
+            print(f"  {asset}: OK — flags={result.get('elasticity_flags')}")
+</file>
+
 <file path="repomix-output2.xml">
 This file is a merged representation of the entire codebase, combined into a single document by Repomix.
 
@@ -15480,6 +19373,103 @@ jobs:
           GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
           ASSET_FILTER:              BTC
         run: python weekly_persistence.py
+</file>
+
+<file path=".github/workflows/daily_engine.yml">
+# daily_engine.yml
+# Arkad Tools — Motor diario (Asset Translator)
+#
+# Corre martes a sábado 00:40 UTC (21:40 ART, lunes a viernes) — después
+# de que termine TODA la extracción diaria, incluida la más tardía
+# (etf-flows-metrics, 00:35 UTC — ver daily_extractors.yml). Antes
+# corría a las 00:15 UTC, 20 minutos antes de etf-flows-metrics: BTC
+# terminaba leyendo el etf_flows_metrics de AYER (fallback silencioso
+# de _snapshots() a 'la última fila on-or-before hoy'), no el de hoy.
+# Se corrige moviendo el motor al final de la cadena — recopilación
+# completa primero, hipótesis después.
+#
+# BTC (único activo 24/7) además corre domingo y lunes 00:40 UTC —
+# procesa el cierre ART de sábado y domingo respectivamente — vía el
+# job daily-engine-btc-weekend, filtrando con ASSET_FILTER=BTC sobre
+# el mismo persistence.py. El resto de los activos no tiene precio
+# nuevo el fin de semana, así que se quedan con el cron de martes a
+# sábado de arriba.
+#
+# También puede lanzarse manualmente desde la pestaña Actions.
+
+name: Daily Engine
+
+on:
+  schedule:
+    - cron: '40 0 * * 2-6'  # daily-engine — 15 activos, lun-vie
+    - cron: '40 0 * * 0,1'  # daily-engine-btc-weekend — solo BTC, sáb y dom
+  workflow_dispatch:
+
+jobs:
+
+  # ──────────────────────────────────────────────────────────────────────────
+  daily-engine:
+    name: Asset Translator (15 activos)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45  # 15 activos x (2 llamadas + posibles reintentos) + pausas entre activos
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '40 0 * * 2-6'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run daily engine
+        env:
+          DATA_LAYER_SUPABASE_URL:   ${{ secrets.DATA_LAYER_SUPABASE_URL }}
+          DATA_LAYER_SUPABASE_KEY:   ${{ secrets.DATA_LAYER_SUPABASE_KEY }}
+          INTEL_LAYER_SUPABASE_URL:  ${{ secrets.INTEL_LAYER_SUPABASE_URL }}
+          INTEL_LAYER_SUPABASE_KEY:  ${{ secrets.INTEL_LAYER_SUPABASE_KEY }}
+          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+        run: python persistence.py
+
+  # ──────────────────────────────────────────────────────────────────────────
+  daily-engine-btc-weekend:
+    name: Asset Translator — BTC only (fin de semana)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10  # 1 activo x (2 llamadas + posibles reintentos)
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '40 0 * * 0,1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run daily engine (BTC only)
+        env:
+          DATA_LAYER_SUPABASE_URL:   ${{ secrets.DATA_LAYER_SUPABASE_URL }}
+          DATA_LAYER_SUPABASE_KEY:   ${{ secrets.DATA_LAYER_SUPABASE_KEY }}
+          INTEL_LAYER_SUPABASE_URL:  ${{ secrets.INTEL_LAYER_SUPABASE_URL }}
+          INTEL_LAYER_SUPABASE_KEY:  ${{ secrets.INTEL_LAYER_SUPABASE_KEY }}
+          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          ASSET_FILTER:              BTC
+        run: python persistence.py
+</file>
+
+</files>
 </file>
 
 <file path=".github/workflows/daily_engine.yml">
