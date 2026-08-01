@@ -190,6 +190,11 @@ ASSET_CONFIGS = {
 
         "calendar_impact_filter": "High",
 
+
+        # --- geopolítica / política comercial (GDELT + Federal Register [+ MOFCOM]) ---
+
+        "geopolitics_lookback_days": 21,
+
         "weekly_expected_runs": 5,
 
     },
@@ -400,6 +405,11 @@ ASSET_CONFIGS = {
 
         "calendar_impact_filter": "High",
 
+
+        # --- geopolítica / política comercial (GDELT + Federal Register [+ MOFCOM]) ---
+
+        "geopolitics_lookback_days": 21,
+
         "weekly_expected_runs": 5,
 
     },
@@ -502,6 +512,11 @@ ASSET_CONFIGS = {
 
         "calendar_impact_filter": "High",
 
+
+        # --- geopolítica / política comercial (GDELT + Federal Register [+ MOFCOM]) ---
+
+        "geopolitics_lookback_days": 21,
+
         "weekly_expected_runs": 5,
 
     },
@@ -597,6 +612,11 @@ ASSET_CONFIGS = {
         "calendar_forward_days": 14,
 
         "calendar_impact_filter": "High",
+
+
+        # --- geopolítica / política comercial (GDELT + Federal Register [+ MOFCOM]) ---
+
+        "geopolitics_lookback_days": 21,
 
         "weekly_expected_runs": 5,
 
@@ -698,6 +718,11 @@ ASSET_CONFIGS = {
 
         "calendar_impact_filter": "High",
 
+
+        # --- geopolítica / política comercial (GDELT + Federal Register [+ MOFCOM]) ---
+
+        "geopolitics_lookback_days": 21,
+
         "weekly_expected_runs": 5,
 
     },
@@ -786,6 +811,11 @@ ASSET_CONFIGS = {
 
         "calendar_impact_filter": "High",
 
+
+        # --- geopolítica / política comercial (GDELT + Federal Register [+ MOFCOM]) ---
+
+        "geopolitics_lookback_days": 21,
+
         "weekly_expected_runs": 5,
 
     },
@@ -867,6 +897,11 @@ ASSET_CONFIGS = {
         "calendar_forward_days": 14,
 
         "calendar_impact_filter": "High",
+
+
+        # --- geopolítica / política comercial (GDELT + Federal Register [+ MOFCOM]) ---
+
+        "geopolitics_lookback_days": 21,
 
         "weekly_expected_runs": 5,
 

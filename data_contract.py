@@ -7,9 +7,12 @@ JSON-serializable con todo lo que el motor de caracterización de Estado
 (doc fuente, Sección 1) necesita: 3 snapshots (current/w4/w12) por fuente,
 calendario reciente + upcoming, correlaciones con zscore/percentil
 calculado on-the-fly (no persistido — ver decisión de arquitectura sobre
-pricing_correlations), y ETF Flows (3 snapshots por ticker, solo para
+pricing_correlations), ETF Flows (3 snapshots por ticker, solo para
 activos con 'etf_tickers' en su config — hoy únicamente BTC; None para
-el resto).
+el resto), y geopolitics (lista de eventos de geopolitical_events —
+GDELT/Federal Register/MOFCOM — solo para activos con
+'geopolitics_lookback_days' en su config; [] para el resto o si no hay
+eventos en la ventana).
 
 No hace ningún juicio de fase/modificador/convicción — eso es trabajo
 del motor LLM (Paso 2). Este módulo solo junta datos crudos de métricas.
@@ -91,6 +94,46 @@ def _get_etf_flows(client, cfg: dict, asset_key: str, today: date) -> dict | Non
         filters = {"asset": asset_key, "ticker": ticker}
         out[ticker] = _snapshots(client, "etf_flows_metrics", "date", filters, today)
     return out
+
+
+def _get_geopolitics(client, cfg: dict, asset_key: str, today: date) -> list:
+    """
+    Eventos de geopolitical_events (GDELT + Federal Register + MOFCOM,
+    Data Layer) relevantes para este activo, en la ventana de lookback.
+
+    El filtro 'asset' ya viene pre-curado por el Data Layer (ver
+    CATEGORY_ASSET_MAP en GDELT/config.py y Policy_watch/config.py) — acá
+    solo se lee, no se decide relevancia ni se duplica ese mapeo.
+
+    Solo se llama para activos con 'geopolitics_lookback_days' en su
+    config (opt-in explícito, mismo patrón que 'etf_tickers' para ETF
+    Flows). Si no está seteado, devuelve [] sin consultar Supabase.
+
+    Devuelve [] tanto si el activo no está habilitado como si está
+    habilitado pero no hay eventos en la ventana — ambos son resultados
+    válidos y esperados, no huecos de datos (la mayoría de los activos,
+    la mayoría de los días, no tienen eventos geopolíticos relevantes).
+    """
+    lookback = cfg.get("geopolitics_lookback_days")
+    if lookback is None:
+        return []
+
+    since = today - timedelta(days=lookback)
+    fields = (
+        "source, category, role, event_date, event_count, "
+        "avg_goldstein, max_abs_goldstein, total_mentions, avg_tone, "
+        "narrative, actor1, actor2, source_urls"
+    )
+    resp = (
+        client.table("geopolitical_events")
+        .select(fields)
+        .eq("asset", asset_key)
+        .gte("event_date", since.isoformat())
+        .lte("event_date", today.isoformat())
+        .order("event_date", desc=True)
+        .execute()
+    )
+    return resp.data or []
 
 
 def _get_sentiment(client, cfg: dict, today: date) -> dict:
@@ -246,6 +289,7 @@ def build_payload(asset_key: str, as_of: date | None = None) -> dict:
         "fred": _get_fred(client, cfg, today),
         "sentiment": _get_sentiment(client, cfg, today),
         "etf_flows": _get_etf_flows(client, cfg, asset_key, today),
+        "geopolitics": _get_geopolitics(client, cfg, asset_key, today),
         "correlations": _get_correlations(client, cfg, today),
         "calendar_recent": _get_calendar_recent(client, cfg, today),
         "calendar_upcoming": _get_calendar_upcoming(client, cfg, today),
@@ -255,5 +299,7 @@ def build_payload(asset_key: str, as_of: date | None = None) -> dict:
 
 if __name__ == "__main__":
     import json
-    result = build_payload("GOLD")
+    import sys
+    asset_key = sys.argv[1] if len(sys.argv) > 1 else "GOLD"
+    result = build_payload(asset_key)
     print(json.dumps(result, indent=2, default=str))
