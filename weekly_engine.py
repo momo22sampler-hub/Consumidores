@@ -113,7 +113,7 @@ constituye inteligencia útil.
 """
 
 _LEAKED_NOMENCLATURE_PATTERN = re.compile(
-    r"\b(fred|cot|pricing|correlations|calendar)\.[a-zA-Z_0-9]+"
+    r"\b(fred|cot|pricing|correlations|calendar|geopolitics|etf_flows)\.[a-zA-Z_0-9]+"
     r"|\bDGS(10|2|5)\b|\bm_money_net\b|\bzscore\b|\bcorr_252d\b",
     re.IGNORECASE,
 )
