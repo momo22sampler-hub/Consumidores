@@ -178,6 +178,25 @@ ASSET_CONFIGS = {
 
         # presentar esto como si tuviera visibilidad de tasas reales.
 
+        # CORRECCIÓN Aug 2026: este comentario nunca llegaba al prompt de
+
+        # la Llamada 2 — quedaba como nota para humanos, no como dato
+
+        # consumible. Se agrega 'known_limitations' como campo real del
+
+        # payload (ver data_contract.build_payload) para que el motor
+
+        # pueda leerlo en tiempo de ejecución, no solo el desarrollador.
+
+        "known_limitations": [
+            "No existe DFII10 (ni ningún TIPS/real yield) en el Data Layer. "
+            "DGS10 (nominal) + PCEPILFE (inflación) son un proxy imperfecto "
+            "de tasas reales, sin controlar por expectativas de inflación de "
+            "mercado. Nunca hablar de 'tasas reales' o 'yield real' como si "
+            "hubiera visibilidad directa de esa serie — hablar en términos de "
+            "tasas nominales elevadas + inflación persistente.",
+        ],
+
 
 
         # --- calendario ---

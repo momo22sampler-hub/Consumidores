@@ -54,7 +54,7 @@ def get_daily_runs(asset_key: str, week_start: date, week_end: date) -> list[dic
     client = get_intel_layer_client()
     resp = (
         client.table("asset_history")
-        .select("as_of, generated_at, fase, modificadores, conviccion, full_output")
+        .select("as_of, generated_at, schema_version, fase, estado, estado_provisional_hacia, modificadores, conviccion, full_output")
         .eq("asset_key", asset_key)
         .gte("as_of", week_start.isoformat())
         .lte("as_of", week_end.isoformat())

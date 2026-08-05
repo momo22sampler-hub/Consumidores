@@ -8,8 +8,9 @@ JSON-serializable con todo lo que el motor de caracterización de Estado
 calendario reciente + upcoming, correlaciones con zscore/percentil
 calculado on-the-fly (no persistido — ver decisión de arquitectura sobre
 pricing_correlations), ETF Flows (3 snapshots por ticker, solo para
-activos con 'etf_tickers' en su config — hoy únicamente BTC; None para
-el resto), y geopolitics (lista de eventos de geopolitical_events —
+activos con 'etf_tickers' en su config — hoy únicamente BTC; la clave
+'etf_flows' directamente NO aparece en el payload del resto), y
+geopolitics (lista de eventos de geopolitical_events —
 GDELT/Federal Register/MOFCOM — solo para activos con
 'geopolitics_lookback_days' en su config; [] para el resto o si no hay
 eventos en la ventana).
@@ -78,7 +79,9 @@ def _get_etf_flows(client, cfg: dict, asset_key: str, today: date) -> dict | Non
     que en V1 solo calcula (asset, ticker) = (BTC, TOTAL)).
 
     Devuelve None para el resto de los 14 activos (no tienen 'etf_tickers'
-    en su config) — el payload de esos activos queda sin cambios.
+    en su config) — build_payload() usa ese None para NO agregar la clave
+    'etf_flows' al payload de esos activos (ver más abajo), en vez de
+    agregarla con valor null.
 
     El filtro 'asset' usa asset_key directamente (coincide 1:1 con la
     columna 'asset' de etf_flows_metrics, ej. "BTC" == "BTC") — no hace
@@ -278,6 +281,13 @@ def build_payload(asset_key: str, as_of: date | None = None) -> dict:
     payload = {
         "asset_key": asset_key,
         "display_name": cfg["display_name"],
+        # Corrección Aug 2026: pasa las limitaciones conocidas del Data
+        # Layer (antes solo comentarios en config.py, invisibles para el
+        # modelo) como dato real del payload — la Llamada 2 lo lee en su
+        # prompt para no presentar un proxy como si fuera el dato que
+        # aproxima (ver engine._SYSTEM_PROMPT_LLAMADA_2). Ausente/lista
+        # vacía si el activo no tiene ninguna declarada.
+        "known_limitations": cfg.get("known_limitations", []),
         "as_of": today.isoformat(),
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "pricing": _get_pricing(client, cfg, today),
@@ -288,12 +298,25 @@ def build_payload(asset_key: str, as_of: date | None = None) -> dict:
         },
         "fred": _get_fred(client, cfg, today),
         "sentiment": _get_sentiment(client, cfg, today),
-        "etf_flows": _get_etf_flows(client, cfg, asset_key, today),
         "geopolitics": _get_geopolitics(client, cfg, asset_key, today),
         "correlations": _get_correlations(client, cfg, today),
         "calendar_recent": _get_calendar_recent(client, cfg, today),
         "calendar_upcoming": _get_calendar_upcoming(client, cfg, today),
     }
+
+    # CORRECCIÓN (encontrada en smoke test real, GOLD): antes esta clave
+    # se agregaba siempre, con valor None para los 14 activos sin
+    # 'etf_tickers'. Eso hacía que la Llamada 2 viera "etf_flows": null
+    # en el payload y lo interpretara como un hueco de evidencia real
+    # ("dato faltante"), cuando en realidad es estructuralmente no
+    # aplicable para ese activo — no hay nada faltando, nunca debió
+    # existir. Se omite la clave por completo cuando no aplica, mismo
+    # criterio que ya usa 'geopolitics' (opt-in vía config, ausente si
+    # no corresponde) en vez de mandar un null ambiguo.
+    etf_flows = _get_etf_flows(client, cfg, asset_key, today)
+    if etf_flows is not None:
+        payload["etf_flows"] = etf_flows
+
     return payload
 
 

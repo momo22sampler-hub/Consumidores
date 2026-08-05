@@ -1,59 +1,46 @@
 """
-persistence.py — Paso 4 del roadmap: escritura/lectura en Intelligence Layer
+persistence.py — Paso 4: escritura/lectura en Intelligence Layer
 Intelligence Layer / Arkad Tools
 
+Adaptado a schema_version=2 (Sentinel Market State Model, Documento 3).
+
+Regla de bootstrap (Documento 3 §7.1): si la fila guardada en
+asset_outputs para un activo tiene schema_version=1 (o no existe
+ninguna fila), get_previous_state()/get_previous_hypothesis() devuelven
+None — el motor lo trata como primera corrida, nunca intenta interpretar
+un 'fase' V1 como si fuera un 'estado' V2.
+
 Funciones públicas:
-  get_previous_hypothesis(asset_key)   -> hipotesis+paranoia de la última
-                                           corrida, para pasarle a
-                                           engine.run_engine() (Sección 6)
-  get_previous_state(asset_key)        -> fase+modificadores+conviccion de
-                                           la última corrida, para comparar
-                                           contra la corrida de hoy
-  generate_and_save(asset_key)         -> orquesta el patrón de 2 llamadas
-                                           y persiste el resultado (esto es
-                                           lo que llama el cron, un asset_key
-                                           a la vez)
-  save_run(asset_key, payload, output, elasticity_flags=None)
-                                        -> escribe en las 3 tablas
-
-Patrón de 2 llamadas (decisión: costo despreciable a 25 activos/día — ver
-conversación): la corrida preliminar (sin elasticity_flags) le da al motor
-libertad para decidir fase/modificador/conviccion de hoy sin ningún sesgo
-externo. Con ESE resultado ya podemos calcular los 5 flags reales
-comparando contra la última corrida guardada (elasticity.py, Paso 3) — y
-recién ahí hacer la corrida final, la que de verdad se persiste, con los
-flags ya resueltos guiando cuánto expandirse (Sección 7 del doc). La
-corrida preliminar se descarta, no se guarda en ninguna tabla.
-
-No mezcla memoria con datos — todo esto vive en el Supabase de
-Intelligence Layer, nunca en el de Data Layer.
-
-Nota (upsert por asset_key+as_of en asset_history y hypotheses_history):
-si el motor corre 2 veces el mismo día para el mismo activo (reintento
-manual, corrida disparada a mano después de una noticia fuerte, etc.),
-la segunda corrida PISA la fila de ese día en vez de insertar una
-variante extra — un solo registro por (asset_key, as_of) en las 3
-tablas. Esto requiere que asset_history y hypotheses_history tengan una
-constraint UNIQUE (asset_key, as_of) en Supabase — ver
-dedup_and_add_constraint.sql.
+  get_previous_hypothesis(asset_key) -> dict | None
+  get_previous_state(asset_key)      -> dict | None
+  save_run(asset_key, payload, output, elasticity_flags=None) -> dict
 """
 
 from datetime import date, datetime, timezone
 
 from output_schema import AssetTranslatorOutput
+from evidence_map import EVIDENCE_TIER_VERSION
 from supabase_clients import get_intel_layer_client
+from data_contract import build_payload
+from engine import run_engine
+from elasticity import compute_elasticity_flags
+
+CURRENT_SCHEMA_VERSION = 2
 
 
 def get_previous_hypothesis(asset_key: str) -> dict | None:
     """
-    Lee la última corrida guardada para este activo desde asset_outputs
-    (upsert de "último análisis"). Devuelve el dict que engine.run_engine()
-    espera como `previous_hypothesis`, o None si es la primera corrida.
+    Lee la última corrida guardada (asset_outputs). Devuelve
+    {"as_of": str, "hipotesis": dict, "paranoia": dict,
+    "invalidaria_check": dict|None} listo para pasarle a
+    precheck.check_invalidacion_confirmada(), o None si es la primera
+    corrida V2 para este activo (no hay fila, o la fila es
+    schema_version=1 — Documento 3 §7.1).
     """
     client = get_intel_layer_client()
     resp = (
         client.table("asset_outputs")
-        .select("hipotesis, paranoia, as_of")
+        .select("hipotesis, paranoia, schema_version, as_of")
         .eq("asset_key", asset_key)
         .limit(1)
         .execute()
@@ -62,29 +49,30 @@ def get_previous_hypothesis(asset_key: str) -> dict | None:
         return None
 
     row = resp.data[0]
+    if row["schema_version"] != CURRENT_SCHEMA_VERSION:
+        return None
+
+    hipotesis = row["hipotesis"] or {}
     return {
         "as_of": row["as_of"],
-        "hipotesis": row["hipotesis"],
+        "hipotesis": hipotesis,
         "paranoia": row["paranoia"],
+        "invalidaria_check": hipotesis.get("invalidaria_check"),
     }
 
 
 def get_previous_state(asset_key: str) -> dict | None:
     """
-    Lee fase/modificadores/conviccion de la última corrida guardada
-    (asset_outputs). Es el insumo de elasticity.compute_elasticity_flags()
-    para comparar la corrida de hoy contra la última — separado de
-    get_previous_hypothesis() porque esa otra función solo trae
-    hipotesis/paranoia (lo que necesita engine.py), no el estado
-    compuesto (lo que necesita elasticity.py).
-
-    Devuelve {"fase": str, "modificadores": list[str], "conviccion": str,
-    "as_of": str} o None si es la primera corrida para este activo.
+    Lee estado/estado_provisional_hacia/conviccion de la última corrida
+    (asset_outputs). Insumo de engine.run_engine() (estado_previo) y de
+    elasticity.compute_elasticity_flags(). None si es la primera corrida
+    V2 para este activo — mismo criterio de bootstrap que
+    get_previous_hypothesis().
     """
     client = get_intel_layer_client()
     resp = (
         client.table("asset_outputs")
-        .select("fase, modificadores, conviccion, as_of")
+        .select("estado, estado_provisional_hacia, modificadores, conviccion, schema_version, as_of")
         .eq("asset_key", asset_key)
         .limit(1)
         .execute()
@@ -93,8 +81,12 @@ def get_previous_state(asset_key: str) -> dict | None:
         return None
 
     row = resp.data[0]
+    if row["schema_version"] != CURRENT_SCHEMA_VERSION:
+        return None
+
     return {
-        "fase": row["fase"],
+        "estado": row["estado"],
+        "estado_provisional_hacia": row["estado_provisional_hacia"],
         "modificadores": row["modificadores"],
         "conviccion": row["conviccion"],
         "as_of": row["as_of"],
@@ -108,55 +100,45 @@ def save_run(
     elasticity_flags: dict | None = None,
 ) -> dict:
     """
-    Persiste una corrida completa en las 3 tablas de Intelligence Layer:
-      - asset_outputs:      UPSERT (pisa el último análisis)
-      - asset_history:      UPSERT por (asset_key, as_of) — un registro
-                             por día, se pisa si el motor corre 2 veces
-      - hypotheses_history: UPSERT por (asset_key, as_of) — ídem
-
-    payload: el dict devuelto por data_contract.build_payload() — se usa
-             solo para sacar display_name, no se persiste completo acá
-             (el payload crudo no es responsabilidad de Intelligence Layer).
-
-    elasticity_flags: dict de elasticity.compute_elasticity_flags() (Paso 3),
-             calculado DESPUÉS de tener `output` (ver nota de arquitectura
-             en elasticity.py — no son pre-calculables para esta misma
-             corrida). Si se pasa, se guarda dentro de full_output en
-             asset_history bajo la clave "elasticity_flags" — no hace
-             falta migración de schema para esto. Si más adelante querés
-             una columna dedicada (para queries más simples desde el
-             cron), avisame y armo la migración.
-
-    Devuelve un resumen de qué se escribió, para logging del caller.
+    Persiste una corrida V2 completa en las 3 tablas. Nunca escribe en
+    la columna vieja 'fase' — queda NULL para filas schema_version=2,
+    tal como define la migración (migration_v2_schema.sql). El
+    ensamblado estado+contexto de AssetTranslatorOutput se aplana acá
+    para las columnas de consulta rápida, y se guarda completo (nested)
+    en asset_history.full_output para auditoría.
     """
     client = get_intel_layer_client()
     today = date.today()
     now = datetime.now(timezone.utc).isoformat()
 
     output_dict = output.model_dump(mode="json")
+    estado, contexto = output.estado, output.contexto
 
-    # --- asset_outputs (upsert) ---
+    # --- asset_outputs (upsert, 1 fila por activo) ---
     outputs_row = {
         "asset_key": asset_key,
         "display_name": payload.get("display_name", asset_key),
         "as_of": today.isoformat(),
         "generated_at": now,
-        "fase": output.estado.fase,
-        "modificadores": output.estado.modificadores,
-        "conviccion": output.estado.conviccion,
-        "evidence_keys": output.estado.evidence_keys,
-        "frase_puente": output.frase_puente,
-        "traduccion_macro": output.traduccion_macro,
-        "en_criollo": output.en_criollo,
-        "hipotesis": output_dict["hipotesis"],
-        "paranoia": output_dict["paranoia"],
-        "memoria": output_dict["memoria"],
+        "schema_version": CURRENT_SCHEMA_VERSION,
+        "estado": estado.estado,
+        "estado_provisional_hacia": estado.estado_provisional_hacia,
+        "evidence_map_version": EVIDENCE_TIER_VERSION,
+        "modificadores": contexto.modificadores,
+        "conviccion": estado.conviccion,
+        "evidence_keys": estado.evidence_keys,
+        "frase_puente": contexto.frase_puente,
+        "traduccion_macro": contexto.traduccion_macro,
+        "en_criollo": contexto.en_criollo,
+        "hipotesis": output_dict["contexto"]["hipotesis"],
+        "paranoia": output_dict["contexto"]["paranoia"],
+        "memoria": output_dict["contexto"]["memoria"],
         "updated_at": now,
+        # 'fase' deliberadamente omitido: queda NULL, Documento 3 §7.
     }
     client.table("asset_outputs").upsert(outputs_row, on_conflict="asset_key").execute()
 
-    # --- asset_history (upsert por asset_key+as_of — evita duplicados si
-    #     el motor corre 2 veces el mismo día) ---
+    # --- asset_history (upsert por asset_key+as_of) ---
     history_full_output = output_dict
     if elasticity_flags is not None:
         history_full_output = {**output_dict, "elasticity_flags": elasticity_flags}
@@ -165,198 +147,135 @@ def save_run(
         "asset_key": asset_key,
         "as_of": today.isoformat(),
         "generated_at": now,
-        "fase": output.estado.fase,
-        "modificadores": output.estado.modificadores,
-        "conviccion": output.estado.conviccion,
+        "schema_version": CURRENT_SCHEMA_VERSION,
+        "estado": estado.estado,
+        "estado_provisional_hacia": estado.estado_provisional_hacia,
+        "evidence_map_version": EVIDENCE_TIER_VERSION,
+        "modificadores": contexto.modificadores,
+        "conviccion": estado.conviccion,
         "full_output": history_full_output,
     }
     client.table("asset_history").upsert(history_row, on_conflict="asset_key,as_of").execute()
 
-    # --- hypotheses_history (upsert por asset_key+as_of — evita duplicados
-    #     si el motor corre 2 veces el mismo día) ---
+    # --- hypotheses_history (upsert por asset_key+as_of) ---
+    hipotesis_dict = output_dict["contexto"]["hipotesis"]
     hyp_row = {
         "asset_key": asset_key,
         "as_of": today.isoformat(),
-        "sostiene": output.hipotesis.sostiene,
-        "debilita": output.hipotesis.debilita,
-        "invalidaria": output.hipotesis.invalidaria,
-        "podria_acelerarla": output.hipotesis.podria_acelerarla,
-        "variable_a_vigilar": output.paranoia.variable_a_vigilar,
-        "contexto_limpio": output.paranoia.contexto_limpio,
-        "estado_hipotesis_previa": output.memoria.estado_hipotesis_previa,
+        "schema_version": CURRENT_SCHEMA_VERSION,
+        "sostiene": contexto.hipotesis.sostiene,
+        "debilita": contexto.hipotesis.debilita,
+        "invalidaria": contexto.hipotesis.invalidaria,
+        "invalidaria_check": hipotesis_dict.get("invalidaria_check"),
+        "podria_acelerarla": contexto.hipotesis.podria_acelerarla,
+        "variable_a_vigilar": contexto.paranoia.variable_a_vigilar,
+        "contexto_limpio": contexto.paranoia.contexto_limpio,
+        "estado_hipotesis_previa": contexto.memoria.estado_hipotesis_previa,
     }
     client.table("hypotheses_history").upsert(hyp_row, on_conflict="asset_key,as_of").execute()
 
     return {
         "asset_key": asset_key,
         "as_of": today.isoformat(),
+        "schema_version": CURRENT_SCHEMA_VERSION,
         "tables_written": ["asset_outputs", "asset_history", "hypotheses_history"],
-        "elasticity_flags": elasticity_flags,
     }
 
 
-def generate_and_save(asset_key: str, verbose: bool = True) -> dict:
+def run_daily_for_asset(asset_key: str, dry_run: bool = False) -> dict:
     """
-    Orquesta una corrida completa para un activo: patrón de 2 llamadas
-    al motor + cálculo de flags + persistencia. Esto es lo que el cron
-    llama una vez por activo (25 veces, una por asset_key).
-
-    1. Arma el payload y busca estado/hipótesis previos.
-    2. Corrida PRELIMINAR (sin elasticity_flags) — el motor decide fase/
-       modificador/conviccion de hoy con libertad total.
-    3. Calcula los 5 flags reales (elasticity.py) comparando esa
-       preliminar contra la última guardada en asset_outputs.
-    4. Corrida FINAL (con elasticity_flags ya resueltos) — esta es la
-       que se persiste. La preliminar se descarta.
-    5. save_run() en las 3 tablas.
-
-    Devuelve el resumen de save_run().
+    Corrida completa V2 para un activo: Etapa 0 + Llamada 1 + Llamada 2
+    (vía engine.run_engine) + elasticity flags. Si dry_run=True, no llama
+    a save_run() — imprime el resultado para revisión manual, mismo
+    espíritu que smoke_test_gold.py pero para los 15 activos en un loop.
     """
-    # Imports acá adentro (no a nivel de módulo) para evitar import
-    # circular: engine.py y data_contract.py ya importan cosas de este
-    # mismo paquete en sus propios __main__.
-    from data_contract import build_payload
-    from engine import run_engine
-    from elasticity import compute_elasticity_flags
-
-    def log(msg: str) -> None:
-        if verbose:
-            print(f"[{asset_key}] {msg}")
-
-    log("Buscando estado e hipótesis previos...")
+    payload = build_payload(asset_key)
     previous_state = get_previous_state(asset_key)
     previous_hypothesis = get_previous_hypothesis(asset_key)
 
-    log("Armando payload desde Data Layer...")
-    payload = build_payload(asset_key)
+    output = run_engine(asset_key, payload, previous_state, previous_hypothesis)
 
-    log("Corrida preliminar (sin flags)...")
-    preliminary_output = run_engine(payload, previous_hypothesis=previous_hypothesis)
+    today_estado = {
+        "estado": output.estado.estado,
+        "modificadores": output.contexto.modificadores,
+        "conviccion": output.estado.conviccion,
+    }
+    elasticity_flags = compute_elasticity_flags(today_estado, previous_state, payload)
 
-    log("Calculando flags de elasticidad (Paso 3, sin LLM)...")
-    preliminary_estado = preliminary_output.estado.model_dump(mode="json")
-    elasticity_flags = compute_elasticity_flags(preliminary_estado, previous_state, payload)
-    log(f"Flags: {elasticity_flags}")
+    if dry_run:
+        print(
+            f"[persistence:{asset_key}] DRY-RUN — no se persiste. "
+            f"estado={output.estado.estado} conviccion={output.estado.conviccion} "
+            f"modificadores={output.contexto.modificadores}"
+        )
+        return {
+            "status": "dry_run_ok",
+            "estado": output.estado.estado,
+            "conviccion": output.estado.conviccion,
+            "modificadores": output.contexto.modificadores,
+            "elasticity_flags": elasticity_flags,
+        }
 
-    log("Corrida final (con flags)...")
-    # Fix: en la primera corrida (previous_state is None) NO se pasan los
-    # flags calculados como si fueran una lectura real de "nada cambió" —
-    # son 5 False por definición (no hay nada contra qué comparar), y
-    # pasarlos como dict (truthy) le indicaría al motor que sea breve
-    # justo en el análisis que debería ser el más completo. Se siguen
-    # persistiendo en asset_history vía save_run() más abajo, solo se
-    # excluyen de la instrucción al modelo.
-    final_output = run_engine(
-        payload,
-        previous_hypothesis=previous_hypothesis,
-        elasticity_flags=elasticity_flags if previous_state is not None else None,
-    )
-
-    log("Guardando en Intelligence Layer...")
-    result = save_run(asset_key, payload, final_output, elasticity_flags=elasticity_flags)
-    log(f"Guardado OK: {result}")
-    return result
+    result = save_run(asset_key, payload, output, elasticity_flags=elasticity_flags)
+    print(f"[persistence:{asset_key}] Guardado OK: {result}")
+    return {"status": "saved", **result}
 
 
 if __name__ == "__main__":
     import os
+    import sys
     import time
     import traceback
 
-    ASSETS = [
-        "GOLD",
-        "SILVER",
-        "CRUDE_OIL",
-        "NASDAQ",
-        "SP500",
-        "DXY",
-        "COPPER",
-        "RUSSELL2000",
-        "EURUSD",
-        "GBPUSD",
-        "USDJPY",
-        "USDCAD",
-        "USDCHF",
-        "AUDUSD",
-        "BTC",
-    ]
+    from config import ASSET_CONFIGS
 
-    # ASSET_FILTER: lista separada por comas de asset_keys a correr en esta
-    # invocación (ej. "BTC"). Permite reusar este mismo script para el cron
-    # de fin de semana de BTC (único activo 24/7 — ver daily_engine.yml)
-    # sin duplicar generate_and_save() en un archivo aparte. Si no está
-    # seteada, corre los 15 de siempre (comportamiento sin cambios).
+    # Mismo criterio que weekly_persistence.py: pausa entre activos para
+    # no ráfagear el free tier de Gemini.
+    DELAY_BETWEEN_ASSETS_SECONDS = 15
+
+    dry_run = "--dry-run" in sys.argv or os.environ.get("DRY_RUN", "").strip().lower() in ("1", "true")
+
+    asset_keys = list(ASSET_CONFIGS.keys())
+
+    # ASSET_FILTER (incluir) / ASSET_EXCLUDE (excluir): listas separadas por
+    # comas de asset_keys. Mismo patrón que weekly_persistence.py — permite
+    # correr un subconjunto (ej. el job daily-engine-btc-weekend con
+    # ASSET_FILTER=BTC) sin duplicar este archivo.
     _asset_filter = os.environ.get("ASSET_FILTER", "").strip()
     if _asset_filter:
         _requested = {a.strip().upper() for a in _asset_filter.split(",") if a.strip()}
-        ASSETS = [a for a in ASSETS if a in _requested]
-        if not ASSETS:
-            raise SystemExit(
-                f"ASSET_FILTER={_asset_filter!r} no matchea ningún asset_key de la lista."
-            )
+        asset_keys = [a for a in asset_keys if a in _requested]
 
-    # Pausa entre activos (no entre reintentos dentro de una misma llamada
-    # — eso ya lo maneja engine.py). Con 15 activos, sin esto se manda una
-    # ráfaga de 2 llamadas x N activos casi en simultáneo, lo que aumenta
-    # la chance de pisar el límite de RPM del free tier y generar más 503
-    # de los que el retry por-llamada puede compensar. 15s es conservador
-    # para no alargar demasiado la corrida (+3.5min extra en total);
-    # ajustar si se sigue viendo 503 frecuente.
-    DELAY_BETWEEN_ASSETS_SECONDS = 15
+    _asset_exclude = os.environ.get("ASSET_EXCLUDE", "").strip()
+    if _asset_exclude:
+        _excluded = {a.strip().upper() for a in _asset_exclude.split(",") if a.strip()}
+        asset_keys = [a for a in asset_keys if a not in _excluded]
 
-    # --- Segunda capa de reintento: a nivel de ACTIVO, no de llamada ---
-    # engine.py ya reintenta cada llamada individual hasta 5 veces con
-    # backoff exponencial (8/16/32/64s ≈ 2min). Eso cubre baches cortos
-    # de Gemini, pero un evento de "high demand" prolongado (Google mismo
-    # reporta que pueden durar de minutos a varias horas) agota esos 2min
-    # sin resolverse. En vez de resignarse a "hoy este activo se queda sin
-    # hipótesis", se guarda qué activos fallaron y se los reintenta en
-    # pasadas separadas, con una espera más larga entre pasadas — le da al
-    # problema de Gemini más tiempo real para disolverse solo, sin
-    # bloquear la corrida entera esperando horas.
-    RETRY_ROUND_DELAY_SECONDS = 300  # 5 min entre pasadas de reintento
-    MAX_RETRY_ROUNDS = 2             # + la pasada inicial = hasta 3 intentos por activo
-
-    def _run_round(assets_to_run: list[str]) -> dict:
-        """Corre generate_and_save() para una lista de activos, con su
-        propio try/except por activo (una falla no frena a los demás)."""
-        round_results: dict[str, dict] = {}
-        for i, asset in enumerate(assets_to_run):
-            try:
-                round_results[asset] = generate_and_save(asset)
-            except Exception as exc:
-                print(f"[{asset}] FALLÓ: {exc}")
-                traceback.print_exc()
-                round_results[asset] = {"error": str(exc)}
-
-            is_last_asset = i == len(assets_to_run) - 1
-            if not is_last_asset:
-                time.sleep(DELAY_BETWEEN_ASSETS_SECONDS)
-        return round_results
-
-    # Pasada inicial: los 15 activos.
-    results: dict[str, dict] = _run_round(ASSETS)
-
-    # Pasadas de reintento: solo los que quedaron con error, hasta agotar
-    # MAX_RETRY_ROUNDS. Si ya no queda ninguno con error, no se espera de más.
-    for retry_round in range(1, MAX_RETRY_ROUNDS + 1):
-        failed_assets = [asset for asset, result in results.items() if "error" in result]
-        if not failed_assets:
-            break
-
-        print(
-            f"\n=== Pasada de reintento {retry_round}/{MAX_RETRY_ROUNDS} — "
-            f"{len(failed_assets)} activo(s) pendientes: {failed_assets} ==="
+    if not asset_keys:
+        raise SystemExit(
+            "ASSET_FILTER/ASSET_EXCLUDE no dejaron ningún asset_key para correr."
         )
-        print(f"Esperando {RETRY_ROUND_DELAY_SECONDS}s antes de reintentar...")
-        time.sleep(RETRY_ROUND_DELAY_SECONDS)
 
-        retry_results = _run_round(failed_assets)
-        results.update(retry_results)
+    if dry_run:
+        print("[persistence] DRY-RUN activado — no se llama a save_run() para ningún activo.")
 
-    print("\n=== Resumen de la corrida ===")
-    for asset, result in results.items():
-        if "error" in result:
-            print(f"  {asset}: ERROR (persistió tras {MAX_RETRY_ROUNDS + 1} pasadas) — {result['error']}")
+    results: dict[str, dict] = {}
+    for i, asset_key in enumerate(asset_keys):
+        try:
+            results[asset_key] = run_daily_for_asset(asset_key, dry_run=dry_run)
+        except Exception as exc:
+            print(f"[persistence:{asset_key}] FALLÓ: {exc}")
+            traceback.print_exc()
+            results[asset_key] = {"status": "error", "error": str(exc)}
+
+        is_last = i == len(asset_keys) - 1
+        if not is_last:
+            time.sleep(DELAY_BETWEEN_ASSETS_SECONDS)
+
+    print("\n=== Resumen Daily Engine (V2) ===")
+    for asset_key, result in results.items():
+        status = result.get("status", "?")
+        if status in ("saved", "dry_run_ok"):
+            print(f"  {asset_key}: {status} — estado={result.get('estado')} conviccion={result.get('conviccion')}")
         else:
-            print(f"  {asset}: OK — flags={result.get('elasticity_flags')}")
+            print(f"  {asset_key}: ERROR — {result.get('error')}")
