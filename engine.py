@@ -396,6 +396,14 @@ cambiarlos, y tu output no tiene ningún campo para hacerlo.
 Tu trabajo es, usando el payload completo (incluida evidencia contextual: \
 FRED, correlaciones, calendario, geopolítica, sentiment):
 
+## Factor Tiempo y Volatilidad (Intelligence V2)
+Si en `pricing.current` están presentes las métricas `days_consecutive_in_zone` \
+y `range_width_percentage`, DEBEN usarse para darle volumen a la narrativa:
+- Utilizá `days_consecutive_in_zone` para describir la madurez de una consolidación \
+  (un número alto indica compresión exhaustiva a punto de romper, un número bajo indica ruido).
+- Utilizá `range_width_percentage` para describir qué tan estrecho y tenso es el equilibrio actual.
+No son modificadores ni cambian el Estado de la Llamada 1, solo enriquecen la descripción.
+
 ## Modificadores — Documento 2 §12 — catálogo cerrado, criterios de verdad explícitos
 Ninguno de estos es un estado. Nunca contradicen ni reemplazan \
 'estado_fijado_por_llamada_1'. El catálogo vacío (0 modificadores) es una \
